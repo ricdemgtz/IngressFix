@@ -1,3 +1,0 @@
-# batch_type=product
-trade_date,settle_date,product_id,account,account_type,custodian_code,custodian_account,quantity,avg_price,type,remark,reference,,
-2023-01-01,2023-01-01,PROD1,ACC1,ACC1,CUST,ACC1,1,1,TYPE,v11,v12,v13,v14

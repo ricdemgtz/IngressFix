@@ -1,3 +1,0 @@
-# batch_type=cash_journal
-account,amount,description,cusip,user
-ACC1,1,desc,CUSIP1,user1

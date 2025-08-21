@@ -1,3 +1,0 @@
-# batch_type=gl_movement
-credit_account,credit_sub_account,amount,description,debit_account,debit_sub_account
-1,1,1,desc,1,1

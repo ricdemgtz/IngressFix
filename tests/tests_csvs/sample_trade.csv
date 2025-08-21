@@ -1,3 +1,0 @@
-# batch_type=trade
-trade_date,settle_date,market,product_id,account,account_type,side,open_close,spc_code,external_id,clearing_account,destination_code,capacity,legend,trailer,quantity,currency,price,execution_time,execution_id,mpid,contra_mpid,fee1,fee2,fee3,fee4,fee5,sec_fee,commission
-2023-01-01,2023-01-01,MKT,PROD1,ACC1,ACC1,BUY,OPEN,SPC,EXT1,ACC1,DST1,CAP,LGND,TRL,1,USD,1,09:30:00,EXE1,MPID,MPID,1,1,1,1,1,1,0.5

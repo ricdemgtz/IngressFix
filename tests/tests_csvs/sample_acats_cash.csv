@@ -1,3 +1,0 @@
-# batch_type=acats_cash
-account,amount,description,cusip,contra_account,contra_description,contra_cusip,user
-ACC1,1,desc,CUSIP1,ACC1,desc,CUSIP1,user1
