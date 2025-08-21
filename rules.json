@@ -21,10 +21,7 @@
     "column_count": 2,
     "date_cols": [],
     "import_table": "import_account_migration",
-    "numeric_cols": [
-      "opening_balance",
-      "credit_limit"
-    ]
+    "numeric_cols": []
   },
   "cash": {
     "column_count": 15,
@@ -118,8 +115,8 @@
     "date_cols": [],
     "import_table": "import_reorg_announcement",
     "numeric_cols": [
-      "ratio",
-      "cash_in_lieu"
+      "rate_from",
+      "rate_to"
     ]
   },
   "seg_req": {
@@ -159,10 +156,6 @@
     "column_count": 1,
     "date_cols": [],
     "import_table": "import_trade_cancel",
-    "numeric_cols": [
-      "qty",
-      "price",
-      "net_amount"
-    ]
+    "numeric_cols": []
   }
 }
