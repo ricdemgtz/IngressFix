@@ -9,7 +9,10 @@ values are database friendly.  All timestamps in logs are in the
 * Python 3.10+
 * Optional: [`PyMySQL`](https://pymysql.readthedocs.io/) when using `--load`
 
-## Basic usage
+## Usage examples
+
+### Local development
+
 ```bash
 export UBMS_LOG_PATH="$PWD/ubms_batch.log"   # optional override
 python3 ingressfix.py \
@@ -21,6 +24,19 @@ python3 ingressfix.py \
 
 This command processes the included `sample_cash_journal.csv` and writes
 `sample_cash_journal_fixed.csv` in the current directory.
+
+### UBMS DEV environment
+
+```bash
+export UBMS_LOG_PATH="/opt/tasks/log/ubms_batch.log"  # default on UBMS hosts
+python3 /home/settle/ubms_pro/server/template/ubms_csv_fix/ingressfix.py \
+  --in "$SRC" --out "$DST" --batch-type "$TYPE" \
+  --rules /home/settle/ubms_pro/server/template/ubms_csv_fix/rules.json \
+  --strict --max-errors 0 --log "$UBMS_LOG_PATH"
+```
+
+Paths reflect UBMS DEV conventions. Adjust them and `UBMS_LOG_PATH` as needed to
+redirect logs.
 
 The original header row is written verbatim.  All fields are quoted on output
 and inner quotes are doubled.  Numeric columns are stripped of currency symbols,
@@ -71,10 +87,11 @@ pytest
 Set the `UBMS_LOG_PATH` environment variable if you need to change the log file
 location.
 
-## Future integration
-`hook_example.sh` demonstrates how an upload handler in UBMS DEV will invoke the
-fixer and then pass the `_fixed.csv` file to existing loaders.  TODO markers in
-code note areas that may require adjustments during real deployment.
+## Upload handler integration
+`scripts/hook_example.sh` illustrates how a UBMS upload handler could invoke the
+fixer and then hand the `_fixed.csv` file to existing loaders.  TODO comments in
+the script mark paths—`RULES`, `ingressfix.py`, and `UBMS_LOG_PATH`—that should
+be updated for the target environment.
 
 ## Production configuration
 Update placeholder values before deploying:
