@@ -53,6 +53,12 @@ def _ensure_dir(p: str) -> None:
     if d and not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
 
+def _ensure_parent_dir(path: str) -> None:
+    """Ensure the parent directory for *path* exists."""
+    parent = os.path.dirname(path)
+    if parent and not os.path.exists(parent):
+        os.makedirs(parent, exist_ok=True)
+
 def log_line(msg: str, log_path: str) -> None:
     """Append *msg* to *log_path* with an ET timestamp."""
     _ensure_dir(log_path)
@@ -254,120 +260,134 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
     """
     total = repaired = unrecoverable = 0
     bad_writer = None
+    sidecar_fh = None
+    sidecar_tmp = sidecar_path + ".tmp"
+    _ensure_parent_dir(out_path)
+    out_tmp = out_path + ".tmp"
 
-    with open(in_path, "r", encoding="utf-8-sig", newline="") as fin, \
-         open(out_path, "w", encoding="utf-8", newline="") as fout:
+    try:
+        with open(in_path, "r", encoding="utf-8-sig", newline="") as fin, \
+             open(out_tmp, "w", encoding="utf-8", newline="") as fout:
 
-        # header: read once, write verbatim
-        first_line = fin.readline()
-        if not first_line:
-            log_warn("Empty file; nothing to do", log_path)
-            return (0,0,0)
-
-        # handle optional leading comment like "# batch_type=..."
-        if first_line.lstrip().startswith("#"):
-            fout.write(first_line)  # preserve comment line
-            header_line = fin.readline()
-            if not header_line:
-                log_warn("Missing header after comment line; nothing to do", log_path)
+            # header: read once, write verbatim
+            first_line = fin.readline()
+            if not first_line:
+                log_warn("Empty file; nothing to do", log_path)
                 return (0,0,0)
-            fout.write(header_line)
-            header = next(csv.reader([header_line]))
-        else:
-            # write the header exactly as read, preserving original newline
-            fout.write(first_line)
-            header = next(csv.reader([first_line]))
 
-        # writer is only used for subsequent rows
-        writer = csv.writer(fout, quoting=csv.QUOTE_ALL)
+            # handle optional leading comment like "# batch_type=..."
+            if first_line.lstrip().startswith("#"):
+                fout.write(first_line)  # preserve comment line
+                header_line = fin.readline()
+                if not header_line:
+                    log_warn("Missing header after comment line; nothing to do", log_path)
+                    return (0,0,0)
+                fout.write(header_line)
+                header = next(csv.reader([header_line]))
+            else:
+                # write the header exactly as read, preserving original newline
+                fout.write(first_line)
+                header = next(csv.reader([first_line]))
 
-        header_map = {h.strip().lower(): i for i, h in enumerate(header)}
-        if numeric_cols:
-            numeric_idx = {header_map[h] for h in header_map if h in numeric_cols}
-        else:
-            numeric_idx = {header_map[h] for h in header_map if h in FALLBACK_NUMERIC_NAMES}
-        date_idx = {header_map[h] for h in header_map if h in date_cols} if date_cols else set()
-        expected = column_count or len(header)
-        text_idx = set(range(expected)) - numeric_idx if numeric_idx else set()
-        reader = csv.reader(fin)
-        line_no = 1
+            # writer is only used for subsequent rows
+            writer = csv.writer(fout, quoting=csv.QUOTE_ALL)
 
-        for row in reader:
-            line_no += 1
-            if len(row) < expected:
-                pad = expected - len(row)
-                row = row + [""] * pad
-                log_warn(
-                    f"Row {line_no} missing {pad} column(s); padded", log_path
-                )
-            elif len(row) > expected:
-                raw_record = reader.dialect.delimiter.join(row)
-                extra = len(row) - expected
-                rebuilt = heuristic_rebuild(raw_record, expected, numeric_idx, text_idx)
-                if rebuilt is None:
-                    if any(idx >= expected for idx in numeric_idx):
-                        unrecoverable += 1
-                        if bad_writer is None:
-                            fb = open(sidecar_path, "w", encoding="utf-8", newline="")
-                            bad_writer = csv.writer(fb, quoting=csv.QUOTE_ALL)
-                            bad_writer.writerow(header)
-                        bad_writer.writerow(row)
-                        log_error(
-                            f"Row {line_no} unrecoverable: extra columns; raw saved -> {os.path.basename(sidecar_path)}",
-                            log_path,
-                        )
-                        if strict or (max_errors and unrecoverable >= max_errors):
-                            return (total, repaired, unrecoverable)
-                        continue
-                    else:
-                        row = row[:expected]
-                        log_warn(
-                            f"Row {line_no} had {extra} extra column(s); truncated",
-                            log_path,
-                        )
-                else:
-                    row = rebuilt
+            header_map = {h.strip().lower(): i for i, h in enumerate(header)}
+            if numeric_cols:
+                numeric_idx = {header_map[h] for h in header_map if h in numeric_cols}
+            else:
+                numeric_idx = {header_map[h] for h in header_map if h in FALLBACK_NUMERIC_NAMES}
+            date_idx = {header_map[h] for h in header_map if h in date_cols} if date_cols else set()
+            expected = column_count or len(header)
+            text_idx = set(range(expected)) - numeric_idx if numeric_idx else set()
+            reader = csv.reader(fin)
+            line_no = 1
+
+            for row in reader:
+                line_no += 1
+                if len(row) < expected:
+                    pad = expected - len(row)
+                    row = row + [""] * pad
                     log_warn(
-                        f"Row {line_no} had {extra} extra column(s); rebuilt",
+                        f"Row {line_no} missing {pad} column(s); padded", log_path
+                    )
+                elif len(row) > expected:
+                    raw_record = reader.dialect.delimiter.join(row)
+                    extra = len(row) - expected
+                    rebuilt = heuristic_rebuild(raw_record, expected, numeric_idx, text_idx)
+                    if rebuilt is None:
+                        if any(idx >= expected for idx in numeric_idx):
+                            unrecoverable += 1
+                            if bad_writer is None:
+                                _ensure_parent_dir(sidecar_path)
+                                sidecar_fh = open(sidecar_tmp, "w", encoding="utf-8", newline="")
+                                bad_writer = csv.writer(sidecar_fh, quoting=csv.QUOTE_ALL)
+                                bad_writer.writerow(header)
+                            bad_writer.writerow(row)
+                            log_error(
+                                f"Row {line_no} unrecoverable: extra columns; raw saved -> {os.path.basename(sidecar_path)}",
+                                log_path,
+                            )
+                            if strict or (max_errors and unrecoverable >= max_errors):
+                                return (total, repaired, unrecoverable)
+                            continue
+                        else:
+                            row = row[:expected]
+                            log_warn(
+                                f"Row {line_no} had {extra} extra column(s); truncated",
+                                log_path,
+                            )
+                    else:
+                        row = rebuilt
+                        log_warn(
+                            f"Row {line_no} had {extra} extra column(s); rebuilt",
+                            log_path,
+                        )
+
+                total += 1
+                changed_any = False
+                bad_cell = False
+                out_row: List[str] = []
+                for idx, val in enumerate(row):
+                    v = (val or "").strip()
+                    if idx in numeric_idx:
+                        norm, changed, bad = normalize_numeric_cell(v)
+                        if bad: bad_cell = True
+                        if changed: changed_any = True
+                        out_row.append(norm)
+                    elif idx in date_idx:
+                        norm, changed, bad = normalize_date_cell(v)
+                        if bad: bad_cell = True
+                        if changed: changed_any = True
+                        out_row.append(norm)
+                    else:
+                        out_row.append(v)
+                if bad_cell:
+                    unrecoverable += 1
+                    if bad_writer is None:
+                        _ensure_parent_dir(sidecar_path)
+                        sidecar_fh = open(sidecar_tmp, "w", encoding="utf-8", newline="")
+                        bad_writer = csv.writer(sidecar_fh, quoting=csv.QUOTE_ALL)
+                        bad_writer.writerow(header)
+                    bad_writer.writerow(row)
+                    log_error(
+                        f"Row {line_no} unrecoverable: invalid numeric or date value; raw saved",
                         log_path,
                     )
+                    if strict or (max_errors and unrecoverable >= max_errors):
+                        return (total, repaired, unrecoverable)
+                    continue
 
-            total += 1
-            changed_any = False
-            bad_cell = False
-            out_row: List[str] = []
-            for idx, val in enumerate(row):
-                v = (val or "").strip()
-                if idx in numeric_idx:
-                    norm, changed, bad = normalize_numeric_cell(v)
-                    if bad: bad_cell = True
-                    if changed: changed_any = True
-                    out_row.append(norm)
-                elif idx in date_idx:
-                    norm, changed, bad = normalize_date_cell(v)
-                    if bad: bad_cell = True
-                    if changed: changed_any = True
-                    out_row.append(norm)
-                else:
-                    out_row.append(v)
-            if bad_cell:
-                unrecoverable += 1
-                if bad_writer is None:
-                    fb = open(sidecar_path, "w", encoding="utf-8", newline="")
-                    bad_writer = csv.writer(fb, quoting=csv.QUOTE_ALL)
-                    bad_writer.writerow(header)
-                bad_writer.writerow(row)
-                log_error(
-                    f"Row {line_no} unrecoverable: invalid numeric or date value; raw saved",
-                    log_path,
-                )
-                if strict or (max_errors and unrecoverable >= max_errors):
-                    return (total, repaired, unrecoverable)
-                continue
+                if changed_any:
+                    repaired += 1
+                writer.writerow(out_row)
 
-            if changed_any:
-                repaired += 1
-            writer.writerow(out_row)
+    finally:
+        if sidecar_fh is not None:
+            sidecar_fh.close()
+            os.replace(sidecar_tmp, sidecar_path)
+        if os.path.exists(out_tmp):
+            os.replace(out_tmp, out_path)
 
     return (total, repaired, unrecoverable)
 
