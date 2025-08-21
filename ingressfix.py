@@ -293,12 +293,43 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
             writer = csv.writer(fout, quoting=csv.QUOTE_ALL)
 
             header_map = {h.strip().lower(): i for i, h in enumerate(header)}
+            header_keys = set(header_map)
+
+            if column_count and len(header) != column_count:
+                log_warn(
+                    f"Header has {len(header)} column(s) but column_count={column_count}",
+                    log_path,
+                )
+
             if numeric_cols:
-                numeric_idx = {header_map[h] for h in header_map if h in numeric_cols}
+                missing_numeric = numeric_cols - header_keys
+                if missing_numeric:
+                    log_warn(
+                        "numeric_cols not in header: " + ", ".join(sorted(missing_numeric)),
+                        log_path,
+                    )
+                numeric_idx = {header_map[h] for h in numeric_cols if h in header_map}
             else:
                 numeric_idx = {header_map[h] for h in header_map if h in FALLBACK_NUMERIC_NAMES}
-            date_idx = {header_map[h] for h in header_map if h in date_cols} if date_cols else set()
+
+            if date_cols:
+                missing_dates = date_cols - header_keys
+                if missing_dates:
+                    log_warn(
+                        "date_cols not in header: " + ", ".join(sorted(missing_dates)),
+                        log_path,
+                    )
+                date_idx = {header_map[h] for h in date_cols if h in header_map}
+            else:
+                date_idx = set()
+
             expected = column_count or len(header)
+            if not column_count:
+                log_warn(
+                    f"column_count not provided; assuming {expected}",
+                    log_path,
+                )
+
             text_idx = set(range(expected)) - numeric_idx if numeric_idx else set()
             reader = csv.reader(fin)
             line_no = 1

@@ -276,6 +276,39 @@ def test_multiline_field_count(tmp_path: Path):
     assert rows[2] == ["A2", "second"]
 
 
+def test_column_count_mismatch_logs_warning(tmp_path: Path):
+    inp = tmp_path / "mismatch.csv"
+    inp.write_text("a,b\n1,2\n")
+    out = tmp_path / "mismatch_fixed.csv"
+    side = tmp_path / "mismatch_fixed.unrecoverable.csv"
+    log = tmp_path / "test.log"
+
+    repair_and_write_csv(
+        str(inp), str(out), str(side), set(), set(), str(log), False, 0, 3
+    )
+
+    content = log.read_text()
+    assert "Header has 2 column" in content
+    assert "column_count=3" in content
+
+
+def test_missing_numeric_and_date_cols_warn(tmp_path: Path):
+    inp = tmp_path / "cols.csv"
+    inp.write_text("a,b\n1,2\n")
+    out = tmp_path / "cols_fixed.csv"
+    side = tmp_path / "cols_fixed.unrecoverable.csv"
+    log = tmp_path / "test.log"
+
+    repair_and_write_csv(
+        str(inp), str(out), str(side), {"amount"}, {"date"}, str(log), False, 0
+    )
+
+    content = log.read_text()
+    assert "numeric_cols not in header: amount" in content
+    assert "date_cols not in header: date" in content
+    assert "column_count not provided" in content
+
+
 def test_sample_csvs(tmp_path: Path):
     samples_dir = Path(__file__).resolve().parent / "tests_csvs"
     rules_path = Path(__file__).resolve().parents[1] / "rules.json"
