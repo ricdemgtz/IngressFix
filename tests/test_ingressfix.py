@@ -1,7 +1,10 @@
 import csv
+import sys
 from pathlib import Path
 
-from ingressfix import normalize_numeric_cell, repair_and_write_csv
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from ingressfix import normalize_numeric_cell, normalize_date_cell, repair_and_write_csv
 
 
 def test_normalize_numeric_cell():
@@ -19,6 +22,20 @@ def test_normalize_numeric_cell():
     assert bad
 
 
+def test_normalize_date_cell():
+    cases = [
+        ("2023-01-02", "2023-01-02"),
+        ("01/02/2023", "2023-01-02"),
+        ("2023/01/02", "2023-01-02"),
+    ]
+    for raw, expected in cases:
+        out, changed, bad = normalize_date_cell(raw)
+        assert out == expected
+        assert not bad
+    out, changed, bad = normalize_date_cell("2023-13-01")
+    assert bad
+
+
 def test_repair_and_sidecar(tmp_path: Path):
     inp = tmp_path / "sample.csv"
     inp.write_text(
@@ -33,7 +50,7 @@ def test_repair_and_sidecar(tmp_path: Path):
     log = tmp_path / "test.log"
 
     total, repaired, bad = repair_and_write_csv(
-        str(inp), str(out), str(side), {"amount"}, str(log), False, 0
+        str(inp), str(out), str(side), {"amount"}, set(), str(log), False, 0
     )
     # two good rows, two unrecoverable
     assert total == 3
@@ -52,6 +69,34 @@ def test_repair_and_sidecar(tmp_path: Path):
     assert bad_rows[2] == ["A4", "1"]
 
 
+def test_date_normalization(tmp_path: Path):
+    inp = tmp_path / "dates.csv"
+    inp.write_text(
+        "account,date,amount\n"
+        "A1,2023-01-02,10\n"
+        "A2,1/3/2023,20\n"
+        "A3,not-a-date,30\n"
+    )
+    out = tmp_path / "dates_fixed.csv"
+    side = tmp_path / "dates_fixed.unrecoverable.csv"
+    log = tmp_path / "test.log"
+
+    total, repaired, bad = repair_and_write_csv(
+        str(inp), str(out), str(side), {"amount"}, {"date"}, str(log), False, 0
+    )
+    assert total == 3
+    assert bad == 1
+
+    with out.open() as f:
+        rows = list(csv.reader(f))
+    assert rows[1] == ["A1", "2023-01-02", "10"]
+    assert rows[2] == ["A2", "2023-01-03", "20"]
+
+    with side.open() as f:
+        side_rows = list(csv.reader(f))
+    assert side_rows[1] == ["A3", "not-a-date", "30"]
+
+
 def test_no_sidecar_when_clean(tmp_path: Path):
     inp = tmp_path / "clean.csv"
     inp.write_text(
@@ -63,7 +108,7 @@ def test_no_sidecar_when_clean(tmp_path: Path):
     log = tmp_path / "test.log"
 
     total, repaired, bad = repair_and_write_csv(
-        str(inp), str(out), str(side), {"amount"}, str(log), False, 0
+        str(inp), str(out), str(side), {"amount"}, set(), str(log), False, 0
     )
     assert total == 1 and bad == 0
     assert not side.exists()
