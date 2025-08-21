@@ -1,0 +1,3 @@
+# batch_type=fund_txn
+account,account_type,product_id,order_type,amount,price,redeem_fee
+ACC1,ACC1,PROD1,TYPE,1,1,1
