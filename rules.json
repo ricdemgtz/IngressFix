@@ -1,5 +1,6 @@
 {
   "acats_cash": {
+    "column_count": 8,
     "date_cols": [],
     "import_table": "import_acats_cash_movement",
     "numeric_cols": [
@@ -7,6 +8,7 @@
     ]
   },
   "acats_stock": {
+    "column_count": 11,
     "date_cols": [],
     "import_table": "import_acats_stock_movement",
     "numeric_cols": [
@@ -16,6 +18,7 @@
     ]
   },
   "account_migration": {
+    "column_count": 2,
     "date_cols": [],
     "import_table": "import_account_migration",
     "numeric_cols": [
@@ -24,6 +27,7 @@
     ]
   },
   "cash": {
+    "column_count": 15,
     "date_cols": [
       "date"
     ],
@@ -33,6 +37,7 @@
     ]
   },
   "cash_journal": {
+    "column_count": 5,
     "date_cols": [
       "txn_date"
     ],
@@ -44,6 +49,7 @@
     ]
   },
   "cash_movement": {
+    "column_count": 8,
     "date_cols": [
       "date"
     ],
@@ -53,6 +59,7 @@
     ]
   },
   "cash_receipt": {
+    "column_count": 14,
     "date_cols": [
       "date"
     ],
@@ -62,6 +69,7 @@
     ]
   },
   "dividend_announce": {
+    "column_count": 11,
     "date_cols": [
       "ex_date"
     ],
@@ -74,6 +82,7 @@
     ]
   },
   "fund_txn": {
+    "column_count": 7,
     "date_cols": [
       "trade_date"
     ],
@@ -85,6 +94,7 @@
     ]
   },
   "gl_movement": {
+    "column_count": 6,
     "date_cols": [],
     "import_table": "import_gl_movement",
     "numeric_cols": [
@@ -95,6 +105,7 @@
     ]
   },
   "product": {
+    "column_count": 12,
     "date_cols": [],
     "import_table": "import_product",
     "numeric_cols": [
@@ -103,6 +114,7 @@
     ]
   },
   "reorg_announce": {
+    "column_count": 10,
     "date_cols": [],
     "import_table": "import_reorg_announcement",
     "numeric_cols": [
@@ -111,6 +123,7 @@
     ]
   },
   "seg_req": {
+    "column_count": 7,
     "date_cols": [],
     "import_table": "import_seg_requirement",
     "numeric_cols": [
@@ -120,6 +133,7 @@
     ]
   },
   "stock_movement": {
+    "column_count": 11,
     "date_cols": [],
     "import_table": "import_stock_movement",
     "numeric_cols": [
@@ -129,6 +143,7 @@
     ]
   },
   "trade": {
+    "column_count": 29,
     "date_cols": [
       "trade_date",
       "settle_date"
@@ -141,6 +156,7 @@
     ]
   },
   "trade_cancel": {
+    "column_count": 1,
     "date_cols": [],
     "import_table": "import_trade_cancel",
     "numeric_cols": [
