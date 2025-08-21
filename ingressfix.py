@@ -130,15 +130,15 @@ def _looks_like_numeric_token(token: str) -> bool:
     pattern = r"\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?"
     return bool(re.fullmatch(pattern, (token or "").strip())) or bool(_num_re.fullmatch(t))
 
-def heuristic_rebuild(parts: List[str], expected_cols: int, numeric_idx: Set[int]) -> Optional[List[str]]:
-    """Greedy attempt to rebuild a mis-parsed CSV row from tokens.
+def heuristic_rebuild(raw_line: str, expected_cols: int, numeric_idx: Set[int]) -> Optional[List[str]]:
+    """Greedy attempt to rebuild a mis-parsed CSV row.
 
-    ``parts`` is the list of tokens as initially parsed (possibly mis-split
-    because of unquoted commas). The function joins tokens back together,
+    The algorithm splits *raw_line* on commas and joins tokens back together,
     preferring to merge tokens at numeric column positions (``numeric_idx``).
     If the final column count matches ``expected_cols`` a list of field strings
     is returned; otherwise ``None`` is returned to signal failure.
     """
+    parts = raw_line.split(",")
     fields, idx = [], 0
     while idx < len(parts) and len(fields) < expected_cols:
         pos = len(fields)
@@ -155,9 +155,11 @@ def heuristic_rebuild(parts: List[str], expected_cols: int, numeric_idx: Set[int
                 remaining_fields = expected_cols - len(fields)
                 used = max(1, remaining_parts - (remaining_fields - 1))
                 best, best_used = ",".join(parts[idx:idx+used]), used
-            fields.append(best); idx += best_used
+            fields.append(best)
+            idx += best_used
         else:
-            fields.append(parts[idx]); idx += 1
+            fields.append(parts[idx])
+            idx += 1
     if len(fields) < expected_cols and idx < len(parts):
         fields.append(",".join(parts[idx:]))
     return fields if len(fields) == expected_cols else None
@@ -252,17 +254,20 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
 
         for row in reader:
             line_no += 1
-            original = row
+            raw = ",".join(row)
             if len(row) != expected:
-                rebuilt = heuristic_rebuild(row, expected, numeric_idx)
+                rebuilt = heuristic_rebuild(raw, expected, numeric_idx)
                 if rebuilt is None:
                     unrecoverable += 1
                     if bad_writer is None:
                         fb = open(sidecar_path, "w", encoding="utf-8", newline="")
                         bad_writer = csv.writer(fb, quoting=csv.QUOTE_ALL)
                         bad_writer.writerow(header)
-                    bad_writer.writerow(original)
-                    log_error(f"Row {line_no} unrecoverable: column mismatch; raw saved -> {os.path.basename(sidecar_path)}", log_path)
+                    bad_writer.writerow(row)
+                    log_error(
+                        f"Row {line_no} unrecoverable: column mismatch; raw saved -> {os.path.basename(sidecar_path)}",
+                        log_path,
+                    )
                     if strict or (max_errors and unrecoverable >= max_errors):
                         return (total, repaired, unrecoverable)
                     continue
