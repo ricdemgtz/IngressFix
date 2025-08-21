@@ -13,10 +13,14 @@ values are database friendly.  All timestamps in logs are in the
 ```bash
 export UBMS_LOG_PATH="$PWD/ubms_batch.log"   # optional override
 python3 ingressfix.py \
-  --in sample.csv --out sample_fixed.csv \
+  --in tests/tests_csvs/sample_cash_journal.csv \
+  --out sample_cash_journal_fixed.csv \
   --batch-type cash_journal --rules rules.json \
   --strict --max-errors 0
 ```
+
+This command processes the included `sample_cash_journal.csv` and writes
+`sample_cash_journal_fixed.csv` in the current directory.
 
 The original header row is written verbatim.  All fields are quoted on output
 and inner quotes are doubled.  Numeric columns are stripped of currency symbols,
@@ -45,6 +49,18 @@ python3 ingressfix.py --in sample.csv --out sample_fixed.csv \
   --load --db-user ricardo --db-pass test123 --db-host localhost \
   --db-port 3306 --db-name veloxdb
 ```
+
+## Testing
+
+Example CSV files for development and testing reside in `tests/tests_csvs/`.
+Run the test suite with:
+
+```bash
+pytest
+```
+
+Set the `UBMS_LOG_PATH` environment variable if you need to change the log file
+location.
 
 ## Future integration
 `hook_example.sh` demonstrates how an upload handler in UBMS DEV will invoke the
