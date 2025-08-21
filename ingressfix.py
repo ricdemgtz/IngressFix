@@ -15,17 +15,14 @@ import argparse, csv, io, json, os, re, sys, time
 from dataclasses import dataclass
 from typing import Iterable, List, Set, Dict, Tuple, Optional
 from datetime import datetime
+from my_log import MyLog
+from mysql_adapter import MySqlAdapter
 
 try:
     from zoneinfo import ZoneInfo
     ET_TZ = ZoneInfo("America/New_York")
 except Exception:
     ET_TZ = None
-
-try:
-    import pymysql
-except Exception:
-    pymysql = None
 
 DEFAULT_LOG = "/opt/tasks/log/ubms_batch.log"
 FALLBACK_NUMERIC_NAMES = {
@@ -49,17 +46,33 @@ def _ensure_dir(path: str) -> None:
     if parent and not os.path.exists(parent):
         os.makedirs(parent, exist_ok=True)
 
-def log_line(msg: str, log_path: str) -> None:
-    """Append *msg* to *log_path* with an ET timestamp."""
-    _ensure_dir(log_path)
+
+def zbx_append(level: str, msg: str, path: str) -> None:
+    _ensure_dir(path)
+    lvl = level.upper()
+    if lvl == "ERROR":
+        tag = "ERROR "
+    elif lvl == "WARNING":
+        tag = "WARNING  "
+    else:
+        tag = "INFO  "
     safe = msg.encode("ascii", "replace").decode("ascii")
-    with open(log_path, "a", encoding="utf-8", newline="") as f:
-        f.write(f"{now_et_str()} {safe}\n")
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        f.write(f"{tag}{now_et_str()} {safe}\n")
 
-def log_info(msg, log_path):  """Write an INFO level message."""; log_line(f"INFO  {msg}", log_path)
-def log_warn(msg, log_path):  """Write a WARNING level message."""; log_line(f"WARNING  {msg}", log_path)
-def log_error(msg, log_path): """Write an ERROR level message (Zabbix expects 'ERROR ')."""; log_line(f"ERROR {msg}", log_path)  # exact "ERROR "
+logger = MyLog()
 
+def log_info(msg, log_path):
+    logger.info(msg)
+    zbx_append("INFO", msg, log_path)
+
+def log_warn(msg, log_path):
+    logger.warning(msg)
+    zbx_append("WARNING", msg, log_path)
+
+def log_error(msg, log_path):
+    logger.error(msg)
+    zbx_append("ERROR", msg, log_path)
 # ---------- Numeric normalization ----------
 _num_re = re.compile(r"^\d+(?:\.\d+)?$")
 
@@ -186,38 +199,24 @@ def heuristic_rebuild(raw_line: str, expected_cols: int, numeric_idx: Set[int],
         fields.append(",".join(parts[idx:]))
     return fields if len(fields) == expected_cols else None
 
-def open_db(args):
-    """Open a MySQL connection using arguments from the CLI."""
-    if pymysql is None:
-        raise RuntimeError("PyMySQL not installed; cannot use DB features")
-    return pymysql.connect(
-        host=args.db_host, port=args.db_port,
-        user=args.db_user, password=args.db_pass,
-        database=args.db_name, autocommit=True, local_infile=True, charset="utf8mb4"
-    )
-
-def get_numeric_columns(conn, table_fullname: str) -> Set[str]:
+def get_numeric_columns(db: MySqlAdapter, table_fullname: str) -> Set[str]:
     """Inspect ``information_schema`` to discover numeric columns."""
     if "." in table_fullname:
         schema, table = table_fullname.split(".", 1)
     else:
-        with conn.cursor() as c:
-            c.execute("SELECT DATABASE()")
-            schema = c.fetchone()[0]
+        res = db.get_results("SELECT DATABASE() AS db")
+        schema = res[0]["db"] if res else ""
         table = table_fullname
-    sql = """
-    SELECT COLUMN_NAME, DATA_TYPE
-    FROM information_schema.columns
-    WHERE table_schema=%s AND table_name=%s
-    """
+    sql = (
+        "SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.columns "
+        f"WHERE table_schema='{schema}' AND table_name='{table}'"
+    )
     numeric_types = {"decimal","numeric","float","double","double precision","real",
                      "int","integer","bigint","smallint","mediumint","tinyint"}
     out = set()
-    with conn.cursor() as c:
-        c.execute(sql, (schema, table))
-        for name, dtype in c.fetchall():
-            if str(dtype).lower() in numeric_types:
-                out.add(name.lower())
+    for row in db.get_results(sql):
+        if str(row["DATA_TYPE"]).lower() in numeric_types:
+            out.add(row["COLUMN_NAME"].lower())
     return out
 
 def load_rules_json(path: Optional[str]) -> Dict[str, dict]:
@@ -421,49 +420,45 @@ SQL_NORMALIZE_EXPR = r"""
   , '$', ''), ',', '')
 """
 
-def db_load_insert(args, out_path: str, import_table: str, log_path: str):
+def db_load_insert(mysql_configs: Dict[str, str], out_path: str, import_table: str, log_path: str):
     """Load the fixed CSV into MySQL for local testing purposes."""
-    if pymysql is None:
-        raise RuntimeError("PyMySQL not installed; cannot use --load")
-    conn = open_db(args)
-    tbl = import_table if "." in import_table else f"{args.db_name}.{import_table}"
+    tbl = import_table if "." in import_table else f"{mysql_configs['database']}.{import_table}"
     tmp = f"{import_table}_stg_{int(time.time())}"
-    with conn.cursor() as c:
-        c.execute(f"CREATE TEMPORARY TABLE {tmp} LIKE {tbl}")
-    with conn.cursor() as c:
-        c.execute(f"""
-            LOAD DATA LOCAL INFILE %s
+    with MySqlAdapter(mysql_configs) as db:
+        db.execute(f"CREATE TEMPORARY TABLE {tmp} LIKE {tbl}")
+        load_sql = f"""
+            LOAD DATA LOCAL INFILE '{out_path}'
             INTO TABLE {tmp}
             FIELDS TERMINATED BY ',' ENCLOSED BY '"'
             LINES TERMINATED BY '\n'
             IGNORE 1 LINES
-        """, (out_path,))
-        loaded = c.rowcount
+        """
+        loaded = db.execute(load_sql, commit=True, doReplace=False)
         log_info(f"Loaded {loaded} rows into {tmp}", log_path)
-    # fetch column types
-    with conn.cursor() as c:
-        c.execute("""
-            SELECT COLUMN_NAME, DATA_TYPE
-            FROM information_schema.columns
-            WHERE table_schema=%s AND table_name=%s
-            ORDER BY ORDINAL_POSITION
-        """, (args.db_name, import_table))
-        cols = c.fetchall()
-    numeric_types = {"decimal","numeric","float","double","double precision","real",
-                     "int","integer","bigint","smallint","mediumint","tinyint"}
-    select_exprs, col_names = [], []
-    for (col, dtype) in cols:
-        col_names.append(f"`{col}`")
-        if str(dtype).lower() in numeric_types:
-            select_exprs.append(f"NULLIF(TRIM({SQL_NORMALIZE_EXPR.format(col=f'`{col}`')}), '')")
-        else:
-            select_exprs.append(f"TRIM(`{col}`)")
-    insert_sql = f"INSERT INTO {tbl} ({', '.join(col_names)}) SELECT {', '.join(select_exprs)} FROM {tmp}"
-    with conn.cursor() as c:
-        c.execute(insert_sql)
-        inserted = c.rowcount
-    log_info(f"Inserted {inserted} rows into {tbl}", log_path)
-    conn.close()
+        cols = db.get_results(
+            "SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.columns "
+            f"WHERE table_schema='{mysql_configs['database']}' AND table_name='{import_table}' "
+            "ORDER BY ORDINAL_POSITION"
+        )
+        numeric_types = {"decimal","numeric","float","double","double precision","real",
+                         "int","integer","bigint","smallint","mediumint","tinyint"}
+        select_exprs, col_names = [], []
+        for row in cols:
+            col = row["COLUMN_NAME"]
+            dtype = row["DATA_TYPE"]
+            col_names.append(f"`{col}`")
+            if str(dtype).lower() in numeric_types:
+                select_exprs.append(
+                    f"NULLIF(TRIM({SQL_NORMALIZE_EXPR.format(col=f'`{col}`')}), '')"
+                )
+            else:
+                select_exprs.append(f"TRIM(`{col}`)")
+        insert_sql = (
+            f"INSERT INTO {tbl} ({', '.join(col_names)}) "
+            f"SELECT {', '.join(select_exprs)} FROM {tmp}"
+        )
+        inserted = db.execute(insert_sql)
+        log_info(f"Inserted {inserted} rows into {tbl}", log_path)
 
 def main():
     p = argparse.ArgumentParser(description="VTP-137 UBMS CSV Ingress Fix")
@@ -495,14 +490,23 @@ def main():
     date_cols_from_manifest = {c.strip().lower() for c in r.get("date_cols", [])}
     column_count = int(r.get("column_count", 0))
 
+    mysql_configs = {
+        "host": args.db_host,
+        "port": args.db_port,
+        "user": args.db_user,
+        "password": args.db_pass,
+        "database": args.db_name,
+        "charset": "utf8mb4",
+        "local_infile": True,
+    }
+
     numeric_cols: Set[str] = set()
     date_cols: Set[str] = date_cols_from_manifest
     # Prefer information_schema for numeric cols if table is known
-    if import_table and pymysql is not None:
+    if import_table:
         try:
-            conn = open_db(args)
-            numeric_cols = get_numeric_columns(conn, import_table)
-            conn.close()
+            with MySqlAdapter(mysql_configs) as db:
+                numeric_cols = get_numeric_columns(db, import_table)
         except Exception as e:
             log_warn(
                 f"info_schema not available for {import_table}, fallback to manifest/names. detail={e}",
@@ -532,7 +536,7 @@ def main():
             log_warn("No import_table in rules for this batch-type; skipping --load.", args.log_path)
         else:
             try:
-                db_load_insert(args, args.out_path, import_table, args.log_path)
+                db_load_insert(mysql_configs, args.out_path, import_table, args.log_path)
             except Exception as e:
                 log_error(f"Load failed: {e}", args.log_path)
                 sys.exit(2)

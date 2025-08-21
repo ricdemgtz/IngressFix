@@ -7,7 +7,12 @@ values are database friendly.  All timestamps in logs are in the
 
 ## Requirements
 * Python 3.10+
-* Optional: [`PyMySQL`](https://pymysql.readthedocs.io/) when using `--load`
+* Optional: MySqlAdapter (uses PyMySQL) when using `--load`
+
+## Logging
+Developer logs are written via MyLog to `./log/YYYYMMDD.log` while a second
+Zabbix-friendly stream is appended to the central file specified by
+`UBMS_LOG_PATH` or `--log` (default `/opt/tasks/log/ubms_batch.log`).
 
 ## Usage examples
 
@@ -66,7 +71,7 @@ done
 
 ## Optional local DB load
 When `--load` is supplied the tool loads the fixed file into MySQL using a
-temporary table.  Example with local development credentials:
+temporary table via `mysql_adapter.MySqlAdapter`. Example with local development credentials:
 
 ```bash
 python3 ingressfix.py --in sample.csv --out sample_fixed.csv \

@@ -2,6 +2,34 @@ import csv
 import json
 import sys
 from pathlib import Path
+import types
+
+class DummyMyLog:
+    def __init__(self, *a, **k):
+        pass
+    def info(self, msg):
+        pass
+    def warning(self, msg):
+        pass
+    def debug(self, msg):
+        pass
+    def error(self, msg):
+        pass
+
+class DummyMySqlAdapter:
+    def __init__(self, *a, **k):
+        pass
+    def __enter__(self):
+        return self
+    def __exit__(self, *exc):
+        pass
+    def execute(self, *a, **k):
+        return 0
+    def get_results(self, *a, **k):
+        return []
+
+sys.modules['my_log'] = types.SimpleNamespace(MyLog=DummyMyLog)
+sys.modules['mysql_adapter'] = types.SimpleNamespace(MySqlAdapter=DummyMySqlAdapter)
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -66,6 +94,9 @@ def test_repair_and_sidecar(tmp_path: Path):
     # three good rows, one unrecoverable
     assert total == 4
     assert bad == 1
+
+    lines = log.read_text().splitlines()
+    assert any(line.startswith("ERROR ") for line in lines)
 
     # header line should be preserved byte-for-byte
     with inp.open("rb") as fin, out.open("rb") as fout:
