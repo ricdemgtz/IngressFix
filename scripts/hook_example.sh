@@ -4,10 +4,10 @@
 set -euo pipefail
 TYPE="$1"; SRC="$2"; DST="$3"
 
-RULES="/home/settle/ubms_pro/server/template/ubms_csv_fix/rules.json"  # TODO: actualizar la ruta de RULES según la instalación real
-LOG="${UBMS_LOG_PATH:-/opt/tasks/log/ubms_batch.log}"  # TODO: verificar y configurar la ruta de log en producción
+RULES="/home/settle/ubms_pro/server/template/ubms_csv_fix/rules.json"  # TODO: adjust RULES path for target environment
+LOG="${UBMS_LOG_PATH:-/opt/tasks/log/ubms_batch.log}"  # TODO: configure log path or UBMS_LOG_PATH for target environment
 
-python3 /home/settle/ubms_pro/server/template/ubms_csv_fix/ingressfix.py \  # TODO: actualizar la ruta al script ingressfix.py según la instalación real
+python3 /home/settle/ubms_pro/server/template/ubms_csv_fix/ingressfix.py \  # TODO: adjust ingressfix.py path for target environment
   --in "$SRC" --out "$DST" --batch-type "$TYPE" --rules "$RULES" \
   --max-errors 0 --strict --log "$LOG"
 # then pass "$DST" to the existing loader...
