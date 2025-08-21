@@ -97,6 +97,24 @@ def normalize_numeric_cell(val: str) -> Tuple[str, bool, bool]:
     out = ("-" if (neg and t != "") else "") + t
     return (out, out != raw.strip(), False)
 
+# ---------- Date normalization ----------
+_date_formats = ["%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%m-%d-%Y", "%Y%m%d"]
+
+def normalize_date_cell(val: str) -> Tuple[str, bool, bool]:
+    """Return (normalized_value, changed, bad). bad=True if not a valid date."""
+    raw = val
+    s = (val or "").strip()
+    if s == "":
+        return ("", False, False)
+    for fmt in _date_formats:
+        try:
+            dt = datetime.strptime(s, fmt)
+            norm = dt.strftime("%Y-%m-%d")
+            return (norm, norm != s, False)
+        except ValueError:
+            pass
+    return (raw, False, True)
+
 def _looks_like_numeric_token(token: str) -> bool:
     """Heuristically determine if *token* resembles a numeric value."""
     t = (token or "").strip()
@@ -182,8 +200,8 @@ def load_rules_json(path: Optional[str]) -> Dict[str, dict]:
     """Load the optional JSON rules manifest.
 
     The manifest maps batch types to configuration, including the import table
-    name and the list of numeric columns.  Missing or malformed files result in
-    an empty dictionary.
+    name and the lists of numeric and date columns.  Missing or malformed files
+    result in an empty dictionary.
     """
     if not path:
         return {}
@@ -194,9 +212,12 @@ def load_rules_json(path: Optional[str]) -> Dict[str, dict]:
         return {}
 
 def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
-                         numeric_cols: Set[str], log_path: str,
+                         numeric_cols: Set[str], date_cols: Set[str], log_path: str,
                          strict: bool, max_errors: int) -> Tuple[int,int,int]:
     """Repair *in_path* and write sanitized output to *out_path*.
+
+    Numeric columns are normalized with :func:`normalize_numeric_cell` and date
+    columns with :func:`normalize_date_cell`.
 
     Returns a tuple ``(total_rows, repaired_rows, unrecoverable_rows)``.  Rows
     deemed unrecoverable are written to *sidecar_path*, which is created lazily
@@ -223,6 +244,7 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
             numeric_idx = {header_map[h] for h in header_map if h in numeric_cols}
         else:
             numeric_idx = {header_map[h] for h in header_map if h in FALLBACK_NUMERIC_NAMES}
+        date_idx = {header_map[h] for h in header_map if h in date_cols} if date_cols else set()
 
         expected = len(header)
         rest = fin.read().splitlines()
@@ -253,6 +275,11 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
                 v = (val or "").strip()
                 if idx in numeric_idx:
                     norm, changed, bad = normalize_numeric_cell(v)
+                    if bad: bad_cell = True
+                    if changed: changed_any = True
+                    out_row.append(norm)
+                elif idx in date_idx:
+                    norm, changed, bad = normalize_date_cell(v)
                     if bad: bad_cell = True
                     if changed: changed_any = True
                     out_row.append(norm)
@@ -355,6 +382,7 @@ def main():
     r = rules.get(args.batch_type, {})
     import_table = r.get("import_table", "")
     numeric_cols_from_manifest = {c.strip().lower() for c in r.get("numeric_cols", [])}
+    date_cols = {c.strip().lower() for c in r.get("date_cols", [])}
 
     numeric_cols: Set[str] = set()
     # Prefer information_schema for numeric cols if table is known
@@ -372,7 +400,7 @@ def main():
     sidecar = os.path.splitext(args.out_path)[0] + ".unrecoverable.csv"
     try:
         total, repaired, bad = repair_and_write_csv(
-            args.in_path, args.out_path, sidecar, numeric_cols,
+            args.in_path, args.out_path, sidecar, numeric_cols, date_cols,
             args.log_path, args.strict, args.max_errors
         )
     except Exception as e:
