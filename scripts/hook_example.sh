@@ -2,6 +2,7 @@
 # Example: UBMS upload handler invoking the fixer.
 # Inputs: $1=type (e.g., cash_journal), $2=src_csv, $3=dst_csv (fixed)
 # TODO markers highlight values to update for the target environment.
+# ingressfix.py relies on MySqlAdapter and MyLog wrappers included with the server template.
 set -euo pipefail
 TYPE="$1"; SRC="$2"; DST="$3"
 
