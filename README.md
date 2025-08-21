@@ -26,6 +26,15 @@ The original header row is written verbatim.  All fields are quoted on output
 and inner quotes are doubled.  Numeric columns are stripped of currency symbols,
 thousands separators and parentheses negatives.
 
+### Rules manifest
+
+The `rules.json` file maps batch types to configuration used by the fixer. Each entry may include:
+
+* `column_count` – expected number of columns in the CSV.
+* `date_cols` – list of column names to normalize as dates.
+* `numeric_cols` – list of columns to sanitize as numeric.
+* `import_table` – optional import table name used by `--load`.
+
 ### Batch mode helper
 Process every `*.csv` in the current folder while skipping files that were
 already fixed or quarantined:
