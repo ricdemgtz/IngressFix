@@ -256,9 +256,9 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
 
         for row in reader:
             line_no += 1
-            raw = ",".join(row)
             if len(row) != expected:
-                rebuilt = heuristic_rebuild(raw, expected, numeric_idx)
+                raw_record = reader.dialect.delimiter.join(row)
+                rebuilt = heuristic_rebuild(raw_record, expected, numeric_idx)
                 if rebuilt is None:
                     unrecoverable += 1
                     if bad_writer is None:
