@@ -237,9 +237,20 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
             log_warn("Empty file; nothing to do", log_path)
             return (0,0,0)
 
-        # write the header exactly as read, preserving original newline
-        fout.write(first_line)
-        header = next(csv.reader([first_line]))
+        # handle optional leading comment like "# batch_type=..."
+        if first_line.lstrip().startswith("#"):
+            fout.write(first_line)  # preserve comment line
+            header_line = fin.readline()
+            if not header_line:
+                log_warn("Missing header after comment line; nothing to do", log_path)
+                return (0,0,0)
+            fout.write(header_line)
+            header = next(csv.reader([header_line]))
+        else:
+            # write the header exactly as read, preserving original newline
+            fout.write(first_line)
+            header = next(csv.reader([first_line]))
+
         # writer is only used for subsequent rows
         writer = csv.writer(fout, quoting=csv.QUOTE_ALL)
 

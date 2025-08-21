@@ -94,6 +94,26 @@ def test_header_preserved(tmp_path: Path):
 
     with inp.open('rb') as fin, out.open('rb') as fout:
         assert fin.readline() == fout.readline()
+
+
+def test_comment_line_before_header(tmp_path: Path):
+    inp = tmp_path / "with_comment.csv"
+    inp.write_text("# batch_type=foo\ncol1,col2\nv1,1\n")
+    out = tmp_path / "with_comment_fixed.csv"
+    side = tmp_path / "with_comment_fixed.unrecoverable.csv"
+    log = tmp_path / "test.log"
+
+    total, repaired, bad = repair_and_write_csv(
+        str(inp), str(out), str(side), set(), set(), str(log), False, 0
+    )
+    assert total == 1 and bad == 0
+
+    with out.open() as f:
+        first = f.readline().strip()
+        assert first == "# batch_type=foo"
+        rows = list(csv.reader(f))
+    assert rows[0] == ["col1", "col2"]
+    assert rows[1] == ["v1", "1"]
 def test_date_normalization(tmp_path: Path):
     inp = tmp_path / "dates.csv"
     inp.write_text(
