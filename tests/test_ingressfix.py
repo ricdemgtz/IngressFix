@@ -24,16 +24,19 @@ def test_normalize_numeric_cell():
 
 def test_normalize_date_cell():
     cases = [
-        ("2023-01-02", "2023-01-02"),
-        ("01/02/2023", "2023-01-02"),
-        ("2023/01/02", "2023-01-02"),
+        ("2023-01-02", "2023-01-02"),      # already ISO
+        ("01/02/2023", "2023-01-02"),      # slashes
+        ("2023/01/02", "2023-01-02"),      # ISO with slashes
+        ("02-03-2023", "2023-02-03"),      # dashes with month first
+        ("20230104", "2023-01-04"),        # compact digits
     ]
     for raw, expected in cases:
         out, changed, bad = normalize_date_cell(raw)
         assert out == expected
         assert not bad
-    out, changed, bad = normalize_date_cell("2023-13-01")
-    assert bad
+    for bad_input in ["2023-13-01", "02/30/2023"]:
+        out, changed, bad = normalize_date_cell(bad_input)
+        assert bad
 
 
 def test_repair_and_sidecar(tmp_path: Path):
