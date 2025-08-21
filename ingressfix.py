@@ -300,7 +300,10 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
                     bad_writer = csv.writer(fb, quoting=csv.QUOTE_ALL)
                     bad_writer.writerow(header)
                 bad_writer.writerow(row)
-                log_error(f"Row {line_no} unrecoverable: non-numeric token in numeric col(s); raw saved", log_path)
+                log_error(
+                    f"Row {line_no} unrecoverable: invalid numeric or date value; raw saved",
+                    log_path,
+                )
                 if strict or (max_errors and unrecoverable >= max_errors):
                     return (total, repaired, unrecoverable)
                 continue
