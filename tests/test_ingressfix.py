@@ -67,3 +67,25 @@ def test_no_sidecar_when_clean(tmp_path: Path):
     )
     assert total == 1 and bad == 0
     assert not side.exists()
+
+
+def test_preserve_newline_in_field(tmp_path: Path):
+    inp = tmp_path / "multiline.csv"
+    inp.write_text(
+        "account,description\n"
+        "A1,\"line1\nline2\"\n"
+        "A2,\"ok\"\n"
+    )
+    out = tmp_path / "multiline_fixed.csv"
+    side = tmp_path / "multiline_fixed.unrecoverable.csv"
+    log = tmp_path / "test.log"
+
+    total, repaired, bad = repair_and_write_csv(
+        str(inp), str(out), str(side), set(), str(log), False, 0
+    )
+    assert total == 2 and bad == 0
+
+    with out.open() as f:
+        rows = list(csv.reader(f))
+    assert len(rows) == 3
+    assert rows[1] == ["A1", "line1\nline2"]
