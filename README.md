@@ -46,6 +46,18 @@ python3 ingressfix.py --in sample.csv --out sample_fixed.csv \
   --db-port 3306 --db-name veloxdb
 ```
 
+## Testing
+
+Example CSV files for development and testing reside in `tests/tests_csvs/`.
+Run the test suite with:
+
+```bash
+pytest
+```
+
+Set the `UBMS_LOG_PATH` environment variable if you need to change the log file
+location.
+
 ## Future integration
 `hook_example.sh` demonstrates how an upload handler in UBMS DEV will invoke the
 fixer and then pass the `_fixed.csv` file to existing loaders.  TODO markers in
