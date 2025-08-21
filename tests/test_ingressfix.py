@@ -76,6 +76,21 @@ def test_repair_and_sidecar(tmp_path: Path):
     assert bad_rows[2] == ["A4", "1"]
 
 
+
+
+def test_header_preserved(tmp_path: Path):
+    inp = tmp_path / 'header.csv'
+    # include CRLF to ensure newline preserved
+    inp.write_bytes(b'col1,col2\r\n1,2\r\n')
+    out = tmp_path / 'header_fixed.csv'
+    side = tmp_path / 'header_fixed.unrecoverable.csv'
+    log = tmp_path / 'test.log'
+
+    total, repaired, bad = repair_and_write_csv(str(inp), str(out), str(side), set(), set(), str(log), False, 0)
+    assert total == 1 and bad == 0
+
+    with inp.open('rb') as fin, out.open('rb') as fout:
+        assert fin.readline() == fout.readline()
 def test_date_normalization(tmp_path: Path):
     inp = tmp_path / "dates.csv"
     inp.write_text(

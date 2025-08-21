@@ -237,9 +237,9 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
             log_warn("Empty file; nothing to do", log_path)
             return (0,0,0)
 
-        header = next(csv.reader([first_line]))
         # write the header exactly as read, preserving original newline
         fout.write(first_line)
+        header = next(csv.reader([first_line]))
         # writer is only used for subsequent rows
         writer = csv.writer(fout, quoting=csv.QUOTE_ALL)
 
