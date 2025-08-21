@@ -34,23 +34,35 @@ FALLBACK_NUMERIC_NAMES = {
 }
 
 def now_et_str() -> str:
+    """Return the current timestamp formatted in Eastern Time.
+
+    The function falls back to the system timezone if the `zoneinfo` package is
+    unavailable.  A plain string is returned to keep logging lightweight and
+    avoid cross-module imports at call sites.
+    """
     dt = datetime.now(ET_TZ) if ET_TZ else datetime.now()
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 def _ensure_dir(p: str) -> None:
+    """Ensure the directory for *p* exists.
+
+    The helper mirrors `mkdir -p` semantics and is intentionally silent on
+    failure; any subsequent file operations will surface meaningful errors.
+    """
     d = os.path.dirname(p)
     if d and not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
 
 def log_line(msg: str, log_path: str) -> None:
+    """Append *msg* to *log_path* with an ET timestamp."""
     _ensure_dir(log_path)
     safe = msg.encode("ascii", "replace").decode("ascii")
     with open(log_path, "a", encoding="utf-8", newline="") as f:
         f.write(f"{now_et_str()} {safe}\n")
 
-def log_info(msg, log_path):  log_line(f"INFO  {msg}", log_path)
-def log_warn(msg, log_path):  log_line(f"WARNING  {msg}", log_path)
-def log_error(msg, log_path): log_line(f"ERROR {msg}", log_path)  # exact "ERROR "
+def log_info(msg, log_path):  """Write an INFO level message."""; log_line(f"INFO  {msg}", log_path)
+def log_warn(msg, log_path):  """Write a WARNING level message."""; log_line(f"WARNING  {msg}", log_path)
+def log_error(msg, log_path): """Write an ERROR level message (Zabbix expects 'ERROR ')."""; log_line(f"ERROR {msg}", log_path)  # exact "ERROR "
 
 # ---------- Numeric normalization ----------
 _num_re = re.compile(r"^\d+(?:\.\d+)?$")
@@ -86,17 +98,28 @@ def normalize_numeric_cell(val: str) -> Tuple[str, bool, bool]:
     return (out, out != raw.strip(), False)
 
 def _looks_like_numeric_token(token: str) -> bool:
+    """Heuristically determine if *token* resembles a numeric value."""
     t = (token or "").strip()
-    # support $, parentheses, , thousands
+    # support $, parentheses, thousands
     if (t.startswith("$(") and t.endswith(")")) or (t.startswith("($") and t.endswith(")")):
         t = t[2:-1].strip()
     else:
-        if t.startswith("$"): t = t[1:].strip()
-        if t.startswith("(") and t.endswith(")"): t = t[1:-1].strip()
+        if t.startswith("$"):
+            t = t[1:].strip()
+        if t.startswith("(") and t.endswith(")"):
+            t = t[1:-1].strip()
     t = t.replace(",", "")
-    return bool(re.fullmatch(r"\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?", (token or "").strip())) or bool(_num_re.fullmatch(t))
+    pattern = r"\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?"
+    return bool(re.fullmatch(pattern, (token or "").strip())) or bool(_num_re.fullmatch(t))
 
 def heuristic_rebuild(raw_line: str, expected_cols: int, numeric_idx: Set[int]) -> Optional[List[str]]:
+    """Greedy attempt to rebuild a mis-parsed CSV row.
+
+    The algorithm splits *raw_line* on commas and joins tokens back together,
+    preferring to merge tokens at numeric column positions (``numeric_idx``).
+    If the final column count matches ``expected_cols`` a list of field strings
+    is returned; otherwise ``None`` is returned to signal failure.
+    """
     parts = raw_line.split(",")
     fields, idx = [], 0
     while idx < len(parts) and len(fields) < expected_cols:
@@ -122,6 +145,7 @@ def heuristic_rebuild(raw_line: str, expected_cols: int, numeric_idx: Set[int]) 
     return fields if len(fields) == expected_cols else None
 
 def open_db(args):
+    """Open a MySQL connection using arguments from the CLI."""
     if pymysql is None:
         raise RuntimeError("PyMySQL not installed; cannot use DB features")
     return pymysql.connect(
@@ -131,6 +155,7 @@ def open_db(args):
     )
 
 def get_numeric_columns(conn, table_fullname: str) -> Set[str]:
+    """Inspect ``information_schema`` to discover numeric columns."""
     if "." in table_fullname:
         schema, table = table_fullname.split(".", 1)
     else:
@@ -154,6 +179,12 @@ def get_numeric_columns(conn, table_fullname: str) -> Set[str]:
     return out
 
 def load_rules_json(path: Optional[str]) -> Dict[str, dict]:
+    """Load the optional JSON rules manifest.
+
+    The manifest maps batch types to configuration, including the import table
+    name and the list of numeric columns.  Missing or malformed files result in
+    an empty dictionary.
+    """
     if not path:
         return {}
     try:
@@ -165,6 +196,12 @@ def load_rules_json(path: Optional[str]) -> Dict[str, dict]:
 def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
                          numeric_cols: Set[str], log_path: str,
                          strict: bool, max_errors: int) -> Tuple[int,int,int]:
+    """Repair *in_path* and write sanitized output to *out_path*.
+
+    Returns a tuple ``(total_rows, repaired_rows, unrecoverable_rows)``.  Rows
+    deemed unrecoverable are written to *sidecar_path*, which is created lazily
+    only when needed.
+    """
     total = repaired = unrecoverable = 0
     bad_writer = None
 
@@ -248,6 +285,7 @@ SQL_NORMALIZE_EXPR = r"""
 """
 
 def db_load_insert(args, out_path: str, import_table: str, log_path: str):
+    """Load the fixed CSV into MySQL for local testing purposes."""
     if pymysql is None:
         raise RuntimeError("PyMySQL not installed; cannot use --load")
     conn = open_db(args)
@@ -299,6 +337,7 @@ def main():
     p.add_argument("--log", dest="log_path", default=os.getenv("UBMS_LOG_PATH", DEFAULT_LOG))
     p.add_argument("--strict", action="store_true")
     p.add_argument("--max-errors", type=int, default=0)
+    p.add_argument("--run", dest="run_id", default="", help="Optional run identifier")
     # DB flags (for local dev only)
     p.add_argument("--load", action="store_true")
     p.add_argument("--db-user", default="ricardo")
@@ -308,7 +347,8 @@ def main():
     p.add_argument("--db-name", default="veloxdb")
     args = p.parse_args()
 
-    log_info(f"#VTP-137 start; in={args.in_path} out={args.out_path} batch={args.batch_type}", args.log_path)
+    run_note = f" run={args.run_id}" if args.run_id else ""
+    log_info(f"#VTP-137 start{run_note}; in={args.in_path} out={args.out_path} batch={args.batch_type}", args.log_path)
 
     # Resolve rules
     rules = load_rules_json(args.rules_path)
