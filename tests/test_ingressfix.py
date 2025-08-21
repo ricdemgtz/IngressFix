@@ -5,7 +5,12 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from ingressfix import normalize_numeric_cell, normalize_date_cell, repair_and_write_csv
+from ingressfix import (
+    heuristic_rebuild,
+    normalize_date_cell,
+    normalize_numeric_cell,
+    repair_and_write_csv,
+)
 
 
 def test_normalize_numeric_cell():
@@ -199,6 +204,32 @@ def test_extra_columns_truncated(tmp_path: Path):
         content = f.read()
     assert "extra column" in content
     assert not side.exists()
+
+
+def test_repair_text_column(tmp_path: Path):
+    inp = tmp_path / "text.csv"
+    inp.write_text(
+        "account,description,amount\n"
+        "A1,desc,with comma,100\n"
+    )
+    out = tmp_path / "text_fixed.csv"
+    side = tmp_path / "text_fixed.unrecoverable.csv"
+    log = tmp_path / "test.log"
+
+    total, repaired, bad = repair_and_write_csv(
+        str(inp), str(out), str(side), {"amount"}, set(), str(log), False, 0
+    )
+    assert total == 1 and bad == 0
+
+    with out.open() as f:
+        rows = list(csv.reader(f))
+    assert rows[1] == ["A1", "desc,with comma", "100"]
+
+
+def test_heuristic_rebuild_numeric_and_text():
+    raw = "A1,1,234,desc,with,comma"
+    rebuilt = heuristic_rebuild(raw, 4, {1}, {0,2,3})
+    assert rebuilt == ["A1", "1,234", "desc", "with,comma"]
 
 
 def test_preserve_newline_in_field(tmp_path: Path):

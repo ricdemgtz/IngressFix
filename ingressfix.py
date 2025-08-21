@@ -130,16 +130,33 @@ def _looks_like_numeric_token(token: str) -> bool:
     pattern = r"\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?"
     return bool(re.fullmatch(pattern, (token or "").strip())) or bool(_num_re.fullmatch(t))
 
-def heuristic_rebuild(raw_line: str, expected_cols: int, numeric_idx: Set[int]) -> Optional[List[str]]:
+def heuristic_rebuild(raw_line: str, expected_cols: int, numeric_idx: Set[int],
+                      text_idx: Set[int]) -> Optional[List[str]]:
     """Greedy attempt to rebuild a mis-parsed CSV row.
 
-    The algorithm splits *raw_line* on commas and joins tokens back together,
-    preferring to merge tokens at numeric column positions (``numeric_idx``).
-    If the final column count matches ``expected_cols`` a list of field strings
-    is returned; otherwise ``None`` is returned to signal failure.
+    Parameters
+    ----------
+    raw_line:
+        Original CSV line without surrounding newline.
+    expected_cols:
+        Desired number of fields once rebuilt.
+    numeric_idx:
+        Column indexes expected to contain numeric values.  Tokens at these
+        positions are merged first using a numeric heuristic.
+    text_idx:
+        Column indexes for non-numeric fields that may legitimately contain
+        commas.  Remaining extra tokens are distributed across these positions
+        from left to right.
+
+    Returns
+    -------
+    list[str] | None
+        A rebuilt list of fields if the final column count matches
+        ``expected_cols``; otherwise ``None`` to signal failure.
     """
     parts = raw_line.split(",")
     fields, idx = [], 0
+    extra_total = max(0, len(parts) - expected_cols)
     while idx < len(parts) and len(fields) < expected_cols:
         pos = len(fields)
         if pos in numeric_idx:
@@ -150,13 +167,22 @@ def heuristic_rebuild(raw_line: str, expected_cols: int, numeric_idx: Set[int]) 
                 if _looks_like_numeric_token(cand):
                     best, best_used = cand, used
             if best is None:
-                # fallback: allocate minimal needed parts so we can finish with correct length
                 remaining_parts = len(parts) - idx
                 remaining_fields = expected_cols - len(fields)
                 used = max(1, remaining_parts - (remaining_fields - 1))
                 best, best_used = ",".join(parts[idx:idx+used]), used
             fields.append(best)
             idx += best_used
+            extra_total = max(0, extra_total - (best_used - 1))
+        elif pos in text_idx:
+            remaining_text = sum(1 for i in text_idx if i >= pos)
+            if extra_total >= remaining_text:
+                used = 1 + (extra_total - (remaining_text - 1))
+            else:
+                used = 1
+            fields.append(",".join(parts[idx:idx+used]))
+            idx += used
+            extra_total = max(0, extra_total - (used - 1))
         else:
             fields.append(parts[idx])
             idx += 1
@@ -261,8 +287,8 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
         else:
             numeric_idx = {header_map[h] for h in header_map if h in FALLBACK_NUMERIC_NAMES}
         date_idx = {header_map[h] for h in header_map if h in date_cols} if date_cols else set()
-
         expected = column_count or len(header)
+        text_idx = set(range(expected)) - numeric_idx if numeric_idx else set()
         reader = csv.reader(fin)
         line_no = 1
 
@@ -277,7 +303,7 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
             elif len(row) > expected:
                 raw_record = reader.dialect.delimiter.join(row)
                 extra = len(row) - expected
-                rebuilt = heuristic_rebuild(raw_record, expected, numeric_idx)
+                rebuilt = heuristic_rebuild(raw_record, expected, numeric_idx, text_idx)
                 if rebuilt is None:
                     if any(idx >= expected for idx in numeric_idx):
                         unrecoverable += 1
