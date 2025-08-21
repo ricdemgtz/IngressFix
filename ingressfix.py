@@ -379,14 +379,15 @@ def main():
     run_note = f" run={args.run_id}" if args.run_id else ""
     log_info(f"#VTP-137 start{run_note}; in={args.in_path} out={args.out_path} batch={args.batch_type}", args.log_path)
 
-    # Resolve rules
+    # Resolve rules for numeric and date columns
     rules = load_rules_json(args.rules_path)
     r = rules.get(args.batch_type, {})
     import_table = r.get("import_table", "")
     numeric_cols_from_manifest = {c.strip().lower() for c in r.get("numeric_cols", [])}
-    date_cols = {c.strip().lower() for c in r.get("date_cols", [])}
+    date_cols_from_manifest = {c.strip().lower() for c in r.get("date_cols", [])}
 
     numeric_cols: Set[str] = set()
+    date_cols: Set[str] = date_cols_from_manifest
     # Prefer information_schema for numeric cols if table is known
     if import_table and pymysql is not None:
         try:
@@ -394,7 +395,10 @@ def main():
             numeric_cols = get_numeric_columns(conn, import_table)
             conn.close()
         except Exception as e:
-            log_warn(f"info_schema not available for {import_table}, fallback to manifest/names. detail={e}", args.log_path)
+            log_warn(
+                f"info_schema not available for {import_table}, fallback to manifest/names. detail={e}",
+                args.log_path,
+            )
             numeric_cols = numeric_cols_from_manifest
     else:
         numeric_cols = numeric_cols_from_manifest
