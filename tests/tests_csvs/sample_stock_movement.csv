@@ -1,0 +1,3 @@
+# batch_type=stock_movement
+account,custodian,location,quantity,description,cusip,contra_account,contra_custodian,contra_location,contra_description,user
+ACC1,CUST,LOC,1,desc,CUSIP1,ACC1,CUST,LOC,desc,user1

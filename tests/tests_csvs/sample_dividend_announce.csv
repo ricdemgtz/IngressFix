@@ -1,0 +1,3 @@
+# batch_type=dividend_announce
+event_id,event_type,description,record_date,pay_date,cusip,dividend_rate,currency,tax_exemption,m_v,allocated_amount
+EVT1,TYPE,desc,2023-01-01,2023-01-01,CUSIP1,1,USD,v9,v10,1

@@ -1,0 +1,3 @@
+# batch_type=reorg_announce
+event_id,event_type,description,record_date,pay_date,cusip,to_cusip,rate_from,rate_to,m_v
+EVT1,TYPE,desc,2023-01-01,2023-01-01,CUSIP1,CUSIP1,1,1,v10
