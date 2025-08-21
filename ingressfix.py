@@ -112,15 +112,15 @@ def _looks_like_numeric_token(token: str) -> bool:
     pattern = r"\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?"
     return bool(re.fullmatch(pattern, (token or "").strip())) or bool(_num_re.fullmatch(t))
 
-def heuristic_rebuild(raw_line: str, expected_cols: int, numeric_idx: Set[int]) -> Optional[List[str]]:
-    """Greedy attempt to rebuild a mis-parsed CSV row.
+def heuristic_rebuild(parts: List[str], expected_cols: int, numeric_idx: Set[int]) -> Optional[List[str]]:
+    """Greedy attempt to rebuild a mis-parsed CSV row from tokens.
 
-    The algorithm splits *raw_line* on commas and joins tokens back together,
+    ``parts`` is the list of tokens as initially parsed (possibly mis-split
+    because of unquoted commas). The function joins tokens back together,
     preferring to merge tokens at numeric column positions (``numeric_idx``).
     If the final column count matches ``expected_cols`` a list of field strings
     is returned; otherwise ``None`` is returned to signal failure.
     """
-    parts = raw_line.split(",")
     fields, idx = [], 0
     while idx < len(parts) and len(fields) < expected_cols:
         pos = len(fields)
@@ -225,20 +225,21 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
             numeric_idx = {header_map[h] for h in header_map if h in FALLBACK_NUMERIC_NAMES}
 
         expected = len(header)
-        rest = fin.read().splitlines()
+        reader = csv.reader(fin)
+        line_no = 1
 
-        for line_no, raw in enumerate(rest, start=2):
-            parsed = next(csv.reader([raw])) if raw is not None else []
-            row = parsed
+        for row in reader:
+            line_no += 1
+            original = row
             if len(row) != expected:
-                rebuilt = heuristic_rebuild(raw, expected, numeric_idx)
+                rebuilt = heuristic_rebuild(row, expected, numeric_idx)
                 if rebuilt is None:
                     unrecoverable += 1
                     if bad_writer is None:
                         fb = open(sidecar_path, "w", encoding="utf-8", newline="")
                         bad_writer = csv.writer(fb, quoting=csv.QUOTE_ALL)
                         bad_writer.writerow(header)
-                    bad_writer.writerow(parsed if parsed else [raw])
+                    bad_writer.writerow(original)
                     log_error(f"Row {line_no} unrecoverable: column mismatch; raw saved -> {os.path.basename(sidecar_path)}", log_path)
                     if strict or (max_errors and unrecoverable >= max_errors):
                         return (total, repaired, unrecoverable)
@@ -270,7 +271,8 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
                     return (total, repaired, unrecoverable)
                 continue
 
-            if changed_any: repaired += 1
+            if changed_any:
+                repaired += 1
             writer.writerow(out_row)
 
     return (total, repaired, unrecoverable)
