@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+*.log
+*.unrecoverable.csv
+*_fixed.csv
