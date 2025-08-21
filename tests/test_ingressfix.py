@@ -56,11 +56,11 @@ def test_repair_and_sidecar(tmp_path: Path):
     log = tmp_path / "test.log"
 
     total, repaired, bad = repair_and_write_csv(
-        str(inp), str(out), str(side), {"amount"}, set(), str(log), False, 0
+        str(inp), str(out), str(side), {"amount"}, set(), str(log), False, 0, 3
     )
-    # two good rows, two unrecoverable
-    assert total == 3
-    assert bad == 2
+    # three good rows, one unrecoverable
+    assert total == 4
+    assert bad == 1
 
     # header line should be preserved byte-for-byte
     with inp.open("rb") as fin, out.open("rb") as fout:
@@ -71,12 +71,12 @@ def test_repair_and_sidecar(tmp_path: Path):
     assert rows[0] == ["account", "amount", "description"]
     assert rows[1] == ["A1", "1732.50", "text, with comma"]
     assert rows[2] == ["A2", "1000.25", "desc2"]
+    assert rows[3] == ["A4", "1", ""]
 
     with side.open() as f:
         bad_rows = list(csv.reader(f))
     assert bad_rows[0] == ["account", "amount", "description"]
     assert bad_rows[1] == ["A3", "oops", "bad"]
-    assert bad_rows[2] == ["A4", "1"]
 
 
 
@@ -156,6 +156,48 @@ def test_no_sidecar_when_clean(tmp_path: Path):
         str(inp), str(out), str(side), {"amount"}, set(), str(log), False, 0
     )
     assert total == 1 and bad == 0
+    assert not side.exists()
+
+
+def test_pad_missing_columns(tmp_path: Path):
+    inp = tmp_path / "missing.csv"
+    inp.write_text("a,b,c\n1,2\n")
+    out = tmp_path / "missing_fixed.csv"
+    side = tmp_path / "missing_fixed.unrecoverable.csv"
+    log = tmp_path / "test.log"
+
+    total, repaired, bad = repair_and_write_csv(
+        str(inp), str(out), str(side), set(), set(), str(log), False, 0, 3
+    )
+    assert total == 1 and bad == 0
+
+    with out.open() as f:
+        rows = list(csv.reader(f))
+    assert rows[1] == ["1", "2", ""]
+    with log.open() as f:
+        content = f.read()
+    assert "missing 1 column" in content
+    assert not side.exists()
+
+
+def test_extra_columns_truncated(tmp_path: Path):
+    inp = tmp_path / "extra.csv"
+    inp.write_text("a,b,c\n1,2,3,4\n")
+    out = tmp_path / "extra_fixed.csv"
+    side = tmp_path / "extra_fixed.unrecoverable.csv"
+    log = tmp_path / "test.log"
+
+    total, repaired, bad = repair_and_write_csv(
+        str(inp), str(out), str(side), set(), set(), str(log), False, 0, 3
+    )
+    assert total == 1 and bad == 0
+
+    with out.open() as f:
+        rows = list(csv.reader(f))
+    assert rows[1] == ["1", "2", "3"]
+    with log.open() as f:
+        content = f.read()
+    assert "extra column" in content
     assert not side.exists()
 
 

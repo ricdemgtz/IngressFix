@@ -215,7 +215,8 @@ def load_rules_json(path: Optional[str]) -> Dict[str, dict]:
 
 def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
                          numeric_cols: Set[str], date_cols: Set[str], log_path: str,
-                         strict: bool, max_errors: int) -> Tuple[int,int,int]:
+                         strict: bool, max_errors: int,
+                         column_count: int = 0) -> Tuple[int,int,int]:
     """Repair *in_path* and write sanitized output to *out_path*.
 
     Numeric columns are normalized with :func:`normalize_numeric_cell` and date
@@ -261,30 +262,49 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
             numeric_idx = {header_map[h] for h in header_map if h in FALLBACK_NUMERIC_NAMES}
         date_idx = {header_map[h] for h in header_map if h in date_cols} if date_cols else set()
 
-        expected = len(header)
+        expected = column_count or len(header)
         reader = csv.reader(fin)
         line_no = 1
 
         for row in reader:
             line_no += 1
-            if len(row) != expected:
+            if len(row) < expected:
+                pad = expected - len(row)
+                row = row + [""] * pad
+                log_warn(
+                    f"Row {line_no} missing {pad} column(s); padded", log_path
+                )
+            elif len(row) > expected:
                 raw_record = reader.dialect.delimiter.join(row)
+                extra = len(row) - expected
                 rebuilt = heuristic_rebuild(raw_record, expected, numeric_idx)
                 if rebuilt is None:
-                    unrecoverable += 1
-                    if bad_writer is None:
-                        fb = open(sidecar_path, "w", encoding="utf-8", newline="")
-                        bad_writer = csv.writer(fb, quoting=csv.QUOTE_ALL)
-                        bad_writer.writerow(header)
-                    bad_writer.writerow(row)
-                    log_error(
-                        f"Row {line_no} unrecoverable: column mismatch; raw saved -> {os.path.basename(sidecar_path)}",
+                    if any(idx >= expected for idx in numeric_idx):
+                        unrecoverable += 1
+                        if bad_writer is None:
+                            fb = open(sidecar_path, "w", encoding="utf-8", newline="")
+                            bad_writer = csv.writer(fb, quoting=csv.QUOTE_ALL)
+                            bad_writer.writerow(header)
+                        bad_writer.writerow(row)
+                        log_error(
+                            f"Row {line_no} unrecoverable: extra columns; raw saved -> {os.path.basename(sidecar_path)}",
+                            log_path,
+                        )
+                        if strict or (max_errors and unrecoverable >= max_errors):
+                            return (total, repaired, unrecoverable)
+                        continue
+                    else:
+                        row = row[:expected]
+                        log_warn(
+                            f"Row {line_no} had {extra} extra column(s); truncated",
+                            log_path,
+                        )
+                else:
+                    row = rebuilt
+                    log_warn(
+                        f"Row {line_no} had {extra} extra column(s); rebuilt",
                         log_path,
                     )
-                    if strict or (max_errors and unrecoverable >= max_errors):
-                        return (total, repaired, unrecoverable)
-                    continue
-                row = rebuilt
 
             total += 1
             changed_any = False
@@ -406,6 +426,7 @@ def main():
     import_table = r.get("import_table", "")
     numeric_cols_from_manifest = {c.strip().lower() for c in r.get("numeric_cols", [])}
     date_cols_from_manifest = {c.strip().lower() for c in r.get("date_cols", [])}
+    column_count = int(r.get("column_count", 0))
 
     numeric_cols: Set[str] = set()
     date_cols: Set[str] = date_cols_from_manifest
@@ -428,7 +449,7 @@ def main():
     try:
         total, repaired, bad = repair_and_write_csv(
             args.in_path, args.out_path, sidecar, numeric_cols, date_cols,
-            args.log_path, args.strict, args.max_errors
+            args.log_path, args.strict, args.max_errors, column_count
         )
     except Exception as e:
         log_error(f"Repair failed: {e}", args.log_path)
