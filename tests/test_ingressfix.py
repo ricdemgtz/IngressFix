@@ -42,6 +42,7 @@ from ingressfix import (
 
 
 def test_normalize_numeric_cell():
+    # Ensures currency-like strings are normalized and invalid ones flagged
     cases = [
         ("$1,234.50", "1234.50"),
         ("(1,000.25)", "-1000.25"),
@@ -57,6 +58,7 @@ def test_normalize_numeric_cell():
 
 
 def test_normalize_date_cell():
+    # Converts various date formats to ISO and flags impossible dates
     cases = [
         ("2023-01-02", "2023-01-02", False),  # already ISO
         ("01/02/2023", "2023-01-02", True),  # slashes
@@ -76,6 +78,8 @@ def test_normalize_date_cell():
 
 
 def test_repair_and_sidecar(tmp_path: Path):
+    # Repairs rows and writes unrecoverable ones to a sidecar file
+    # Build CSV with good, fixable, and unrecoverable rows
     inp = tmp_path / "sample.csv"
     inp.write_text(
         "account,amount,description\n"
@@ -91,24 +95,27 @@ def test_repair_and_sidecar(tmp_path: Path):
     total, repaired, bad = repair_and_write_csv(
         str(inp), str(out), str(side), {"amount"}, set(), str(log), False, 0, 3
     )
-    # three good rows, one unrecoverable
+    # One of four rows should be unrecoverable
     assert total == 4
     assert bad == 1
 
+    # Log should contain an error for the bad row
     lines = log.read_text().splitlines()
     assert any(line.startswith("ERROR ") for line in lines)
 
-    # header line should be preserved byte-for-byte
+    # Header line should be preserved byte-for-byte
     with inp.open("rb") as fin, out.open("rb") as fout:
         assert fin.readline() == fout.readline()
 
     with out.open() as f:
         rows = list(csv.reader(f))
+    # Rows are repaired with normalized amounts
     assert rows[0] == ["account", "amount", "description"]
     assert rows[1] == ["A1", "1732.50", "text, with comma"]
     assert rows[2] == ["A2", "1000.25", "desc2"]
     assert rows[3] == ["A4", "1", ""]
 
+    # Sidecar contains the unrecoverable row
     with side.open() as f:
         bad_rows = list(csv.reader(f))
     assert bad_rows[0] == ["account", "amount", "description"]
@@ -118,8 +125,9 @@ def test_repair_and_sidecar(tmp_path: Path):
 
 
 def test_header_preserved(tmp_path: Path):
+    # Ensures header is unchanged even with CRLF newlines
     inp = tmp_path / 'header.csv'
-    # include CRLF to ensure newline preserved
+    # Include CRLF to ensure newline preserved
     inp.write_bytes(b'col1,col2\r\n1,2\r\n')
     out = tmp_path / 'header_fixed.csv'
     side = tmp_path / 'header_fixed.unrecoverable.csv'
@@ -128,12 +136,15 @@ def test_header_preserved(tmp_path: Path):
     total, repaired, bad = repair_and_write_csv(str(inp), str(out), str(side), set(), set(), str(log), False, 0)
     assert total == 1 and bad == 0
 
+    # Header bytes must match exactly
     with inp.open('rb') as fin, out.open('rb') as fout:
         assert fin.readline() == fout.readline()
 
 
 def test_comment_line_before_header(tmp_path: Path):
+    # Preserves leading comment lines before the header
     inp = tmp_path / "with_comment.csv"
+    # File starts with a comment line
     inp.write_text("# batch_type=foo\ncol1,col2\nv1,1\n")
     out = tmp_path / "with_comment_fixed.csv"
     side = tmp_path / "with_comment_fixed.unrecoverable.csv"
@@ -148,9 +159,12 @@ def test_comment_line_before_header(tmp_path: Path):
         first = f.readline().strip()
         assert first == "# batch_type=foo"
         rows = list(csv.reader(f))
+    # Data rows follow the preserved comment
     assert rows[0] == ["col1", "col2"]
     assert rows[1] == ["v1", "1"]
 def test_date_normalization(tmp_path: Path):
+    # Normalizes date columns and captures invalid dates in sidecar
+    # CSV includes valid and invalid date entries
     inp = tmp_path / "dates.csv"
     inp.write_text(
         "account,date,amount\n"
@@ -170,15 +184,19 @@ def test_date_normalization(tmp_path: Path):
 
     with out.open() as f:
         rows = list(csv.reader(f))
+    # Valid dates are normalized to ISO format
     assert rows[1] == ["A1", "2023-01-02", "10"]
     assert rows[2] == ["A2", "2023-01-03", "20"]
 
+    # Invalid date is sent to sidecar
     with side.open() as f:
         side_rows = list(csv.reader(f))
     assert side_rows[1] == ["A3", "not-a-date", "30"]
 
 
 def test_no_sidecar_when_clean(tmp_path: Path):
+    # Does not create sidecar when all rows are valid
+    # CSV contains only clean data
     inp = tmp_path / "clean.csv"
     inp.write_text(
         "account,amount,description\n"
@@ -192,10 +210,13 @@ def test_no_sidecar_when_clean(tmp_path: Path):
         str(inp), str(out), str(side), {"amount"}, set(), str(log), False, 0
     )
     assert total == 1 and bad == 0
+    # Sidecar file should not exist
     assert not side.exists()
 
 
 def test_pad_missing_columns(tmp_path: Path):
+    # Pads rows that have fewer columns than the header
+    # Row is missing one column
     inp = tmp_path / "missing.csv"
     inp.write_text("a,b,c\n1,2\n")
     out = tmp_path / "missing_fixed.csv"
@@ -209,6 +230,7 @@ def test_pad_missing_columns(tmp_path: Path):
 
     with out.open() as f:
         rows = list(csv.reader(f))
+    # Missing column should be padded with empty string
     assert rows[1] == ["1", "2", ""]
     with log.open() as f:
         content = f.read()
@@ -217,6 +239,8 @@ def test_pad_missing_columns(tmp_path: Path):
 
 
 def test_extra_columns_truncated(tmp_path: Path):
+    # Truncates rows that have extra columns beyond the header
+    # Row includes an extra field
     inp = tmp_path / "extra.csv"
     inp.write_text("a,b,c\n1,2,3,4\n")
     out = tmp_path / "extra_fixed.csv"
@@ -230,6 +254,7 @@ def test_extra_columns_truncated(tmp_path: Path):
 
     with out.open() as f:
         rows = list(csv.reader(f))
+    # Extra column should be discarded
     assert rows[1] == ["1", "2", "3"]
     with log.open() as f:
         content = f.read()
@@ -238,6 +263,8 @@ def test_extra_columns_truncated(tmp_path: Path):
 
 
 def test_repair_text_column(tmp_path: Path):
+    # Repairs unquoted commas within text fields
+    # Description column contains an unquoted comma
     inp = tmp_path / "text.csv"
     inp.write_text(
         "account,description,amount\n"
@@ -254,16 +281,20 @@ def test_repair_text_column(tmp_path: Path):
 
     with out.open() as f:
         rows = list(csv.reader(f))
+    # Description should be restored with comma
     assert rows[1] == ["A1", "desc,with comma", "100"]
 
 
 def test_heuristic_rebuild_numeric_and_text():
+    # Splits numeric and text fields that contain commas
     raw = "A1,1,234,desc,with,comma"
     rebuilt = heuristic_rebuild(raw, 4, {1}, {0,2,3})
     assert rebuilt == ["A1", "1,234", "desc", "with,comma"]
 
 
 def test_preserve_newline_in_field(tmp_path: Path):
+    # Preserves newline characters inside quoted fields
+    # Input contains a multi-line description field
     inp = tmp_path / "multiline.csv"
     inp.write_text(
         "account,description\n"
@@ -281,11 +312,14 @@ def test_preserve_newline_in_field(tmp_path: Path):
 
     with out.open() as f:
         rows = list(csv.reader(f))
+    # Multi-line content becomes a single cell with newline
     assert len(rows) == 3
     assert rows[1] == ["A1", "line1\nline2"]
 
 
 def test_multiline_field_count(tmp_path: Path):
+    # Handles files where fields span multiple lines without miscounting rows
+    # Two rows include multi-line descriptions
     inp = tmp_path / "multiline_count.csv"
     inp.write_text(
         "account,description\n"
@@ -308,6 +342,8 @@ def test_multiline_field_count(tmp_path: Path):
 
 
 def test_column_count_mismatch_logs_warning(tmp_path: Path):
+    # Logs warning when declared column count differs from header
+    # column_count argument larger than actual columns
     inp = tmp_path / "mismatch.csv"
     inp.write_text("a,b\n1,2\n")
     out = tmp_path / "mismatch_fixed.csv"
@@ -324,6 +360,8 @@ def test_column_count_mismatch_logs_warning(tmp_path: Path):
 
 
 def test_missing_numeric_and_date_cols_warn(tmp_path: Path):
+    # Warns when specified numeric/date columns are absent from header
+    # CSV lacks referenced columns
     inp = tmp_path / "cols.csv"
     inp.write_text("a,b\n1,2\n")
     out = tmp_path / "cols_fixed.csv"
@@ -341,6 +379,7 @@ def test_missing_numeric_and_date_cols_warn(tmp_path: Path):
 
 
 def test_sample_csvs(tmp_path: Path):
+    # Verifies sample CSVs repair cleanly according to rules.json
     samples_dir = Path(__file__).resolve().parent / "tests_csvs"
     rules_path = Path(__file__).resolve().parents[1] / "rules.json"
     rules = json.loads(rules_path.read_text())
@@ -355,6 +394,7 @@ def test_sample_csvs(tmp_path: Path):
         numeric_cols = {c.lower() for c in cfg.get("numeric_cols", [])}
         date_cols = {c.lower() for c in cfg.get("date_cols", [])}
 
+        # Run repair using configuration from rules
         tmp_in = tmp_path / sample.name
         tmp_in.write_text("".join(lines[1:]))
         out = tmp_path / f"{sample.stem}_fixed.csv"
@@ -369,6 +409,7 @@ def test_sample_csvs(tmp_path: Path):
         assert bad == 0
         assert not side.exists()
 
+        # Header should be preserved exactly
         with tmp_in.open("rb") as fin, out.open("rb") as fout:
             assert fin.readline() == fout.readline()
 
@@ -377,10 +418,11 @@ def test_sample_csvs(tmp_path: Path):
         with out.open() as fout:
             out_rows = list(csv.reader(fout))
 
-        # header should always be preserved byte-for-byte
+        # Header should always be preserved byte-for-byte
         assert out_rows[0] == expected_rows[0]
 
 def test_mismatched_numeric_date_cols_warn(tmp_path: Path):
+    # Warns when numeric/date columns are missing even with provided column count
     inp = tmp_path / "mismatch_cols.csv"
     inp.write_text("a,b,c\n1,2,3\n")
     out = tmp_path / "mismatch_cols_fixed.csv"
@@ -397,6 +439,7 @@ def test_mismatched_numeric_date_cols_warn(tmp_path: Path):
 
 
 def test_rebuild_numeric_and_text_commas(tmp_path: Path):
+    # Rebuilds rows where numeric and text fields contain commas
     samples_dir = Path(__file__).resolve().parent / "tests_csvs"
     inp = samples_dir / "mixed_commas.csv"
     out = tmp_path / "mixed_commas_fixed.csv"
@@ -416,6 +459,8 @@ def test_rebuild_numeric_and_text_commas(tmp_path: Path):
 
 
 def test_sidecar_created_only_when_unrecoverable(tmp_path: Path):
+    # Creates sidecar file only for inputs with unrecoverable rows
+    # First file contains a bad numeric value
     inp_bad = tmp_path / "bad.csv"
     inp_bad.write_text("account,amount\nA1,bad\n")
     out_bad = tmp_path / "bad_fixed.csv"
@@ -428,6 +473,7 @@ def test_sidecar_created_only_when_unrecoverable(tmp_path: Path):
     assert bad == 1
     assert side_bad.exists()
 
+    # Second file is clean and should not produce a sidecar
     inp_good = tmp_path / "good.csv"
     inp_good.write_text("account,amount\nA1,100\n")
     out_good = tmp_path / "good_fixed.csv"
