@@ -126,7 +126,7 @@ def test_preserve_newline_in_field(tmp_path: Path):
     log = tmp_path / "test.log"
 
     total, repaired, bad = repair_and_write_csv(
-        str(inp), str(out), str(side), set(), str(log), False, 0
+        str(inp), str(out), str(side), set(), set(), str(log), False, 0
     )
     assert total == 2 and bad == 0
 

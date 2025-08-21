@@ -50,3 +50,13 @@ python3 ingressfix.py --in sample.csv --out sample_fixed.csv \
 `hook_example.sh` demonstrates how an upload handler in UBMS DEV will invoke the
 fixer and then pass the `_fixed.csv` file to existing loaders.  TODO markers in
 code note areas that may require adjustments during real deployment.
+
+## Production configuration
+Update placeholder values before deploying:
+
+* Paths in `scripts/hook_example.sh` such as `RULES`, the log file, and the
+  location of `ingressfix.py`.
+* Set the `UBMS_LOG_PATH` environment variable if a different log directory is
+  required.
+* Provide database credentials (`--db-user`, `--db-pass`, `--db-host`, etc.)
+  when using the optional `--load` feature.
