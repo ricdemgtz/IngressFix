@@ -1,13 +1,52 @@
-Local run
+# UBMS CSV Ingress Fix
 
-export UBMS_LOG_PATH=$PWD/ubms_batch.log
-python3 ingressfix.py --in sample.csv --out sample_fixed.csv \
+Utility for normalizing broker batch CSV files before loading into UBMS. The
+script is header-safe, quotes every field, and cleans numeric columns so that
+values are database friendly.  All timestamps in logs are in the
+`America/New_York` timezone.
+
+## Requirements
+* Python 3.10+
+* Optional: [`PyMySQL`](https://pymysql.readthedocs.io/) when using `--load`
+
+## Basic usage
+```bash
+export UBMS_LOG_PATH="$PWD/ubms_batch.log"   # optional override
+python3 ingressfix.py \
+  --in sample.csv --out sample_fixed.csv \
+  --batch-type cash_journal --rules rules.json \
+  --strict --max-errors 0
+```
+
+The original header row is written verbatim.  All fields are quoted on output
+and inner quotes are doubled.  Numeric columns are stripped of currency symbols,
+thousands separators and parentheses negatives.
+
+### Batch mode helper
+Process every `*.csv` in the current folder while skipping files that were
+already fixed or quarantined:
+
+```bash
+for f in *.csv; do
+  [[ $f == *_fixed.csv || $f == *.unrecoverable.csv ]] && continue
+  python3 ingressfix.py --in "$f" --out "${f%.csv}_fixed.csv" \
     --batch-type cash_journal --rules rules.json --strict --max-errors 0
+  # feed "${f%.csv}_fixed.csv" to the existing loader
+done
+```
 
+## Optional local DB load
+When `--load` is supplied the tool loads the fixed file into MySQL using a
+temporary table.  Example with local development credentials:
 
-Local load (optional)
-
+```bash
 python3 ingressfix.py --in sample.csv --out sample_fixed.csv \
-    --batch-type cash_journal --rules rules.json --strict --max-errors 0 \
-    --load --db-user ricardo --db-pass test123 --db-host localhost --db-port 3306 --db-name veloxdb
+  --batch-type cash_journal --rules rules.json --strict --max-errors 0 \
+  --load --db-user ricardo --db-pass test123 --db-host localhost \
+  --db-port 3306 --db-name veloxdb
+```
 
+## Future integration
+`hook_example.sh` demonstrates how an upload handler in UBMS DEV will invoke the
+fixer and then pass the `_fixed.csv` file to existing loaders.  TODO markers in
+code note areas that may require adjustments during real deployment.
