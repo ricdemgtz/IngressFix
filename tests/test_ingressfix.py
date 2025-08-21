@@ -1,4 +1,5 @@
 import csv
+import json
 import sys
 from pathlib import Path
 
@@ -180,3 +181,42 @@ def test_multiline_field_count(tmp_path: Path):
         rows = list(csv.reader(f))
     assert rows[1] == ["A1", "line1\nline2"]
     assert rows[2] == ["A2", "second"]
+
+
+def test_sample_csvs(tmp_path: Path):
+    samples_dir = Path(__file__).resolve().parent / "tests_csvs"
+    rules_path = Path(__file__).resolve().parents[1] / "rules.json"
+    rules = json.loads(rules_path.read_text())
+
+    for sample in samples_dir.glob("sample_*.csv"):
+        lines = sample.read_text().splitlines(True)
+        assert lines, "sample file must not be empty"
+        first = lines[0].strip()
+        assert first.startswith("# batch_type="), "missing batch_type comment"
+        batch_type = first.split("=", 1)[1]
+        cfg = rules.get(batch_type, {})
+        numeric_cols = {c.lower() for c in cfg.get("numeric_cols", [])}
+        date_cols = {c.lower() for c in cfg.get("date_cols", [])}
+
+        tmp_in = tmp_path / sample.name
+        tmp_in.write_text("".join(lines[1:]))
+        out = tmp_path / f"{sample.stem}_fixed.csv"
+        side = tmp_path / f"{sample.stem}_fixed.unrecoverable.csv"
+        log = tmp_path / f"{sample.stem}.log"
+
+        total, repaired, bad = repair_and_write_csv(
+            str(tmp_in), str(out), str(side), numeric_cols, date_cols, str(log), False, 0
+        )
+
+        assert total == 1
+        assert bad == 0
+        assert not side.exists()
+
+        with tmp_in.open("rb") as fin, out.open("rb") as fout:
+            assert fin.readline() == fout.readline()
+
+        with tmp_in.open() as fin:
+            expected_rows = list(csv.reader(fin))
+        with out.open() as fout:
+            out_rows = list(csv.reader(fout))
+        assert out_rows == expected_rows
