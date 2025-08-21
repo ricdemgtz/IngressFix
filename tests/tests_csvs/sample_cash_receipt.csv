@@ -1,0 +1,3 @@
+# batch_type=cash_receipt
+type,account,amount,description,bank_account,ordering_customer_name,remittance_detail,senders_reference,sender_to_receiver_information,ordering_customer_address,ordering_bank_name,ordering_bank_address,ordering_bank_name2,ordering_bank_address2
+TYPE,ACC1,$1,234.56,desc,ACC1,v6,v7,v8,v9,v10,v11,v12,v13,v14

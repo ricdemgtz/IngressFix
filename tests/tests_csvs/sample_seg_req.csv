@@ -1,0 +1,3 @@
+# batch_type=seg_req
+account,account_type,cusip,from,to,quantity,description
+ACC1,ACC1,CUSIP1,FROM,TO,1,234,desc

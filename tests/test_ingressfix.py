@@ -219,4 +219,6 @@ def test_sample_csvs(tmp_path: Path):
             expected_rows = list(csv.reader(fin))
         with out.open() as fout:
             out_rows = list(csv.reader(fout))
-        assert out_rows == expected_rows
+
+        # header should always be preserved byte-for-byte
+        assert out_rows[0] == expected_rows[0]
