@@ -5,3 +5,4 @@ venv/
 *.log
 *.unrecoverable.csv
 *_fixed.csv
+fixed/

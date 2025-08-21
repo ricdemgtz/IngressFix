@@ -53,6 +53,12 @@ def _ensure_dir(p: str) -> None:
     if d and not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
 
+def _ensure_parent_dir(path: str) -> None:
+    """Ensure the parent directory for *path* exists."""
+    parent = os.path.dirname(path)
+    if parent and not os.path.exists(parent):
+        os.makedirs(parent, exist_ok=True)
+
 def log_line(msg: str, log_path: str) -> None:
     """Append *msg* to *log_path* with an ET timestamp."""
     _ensure_dir(log_path)
@@ -130,16 +136,33 @@ def _looks_like_numeric_token(token: str) -> bool:
     pattern = r"\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?"
     return bool(re.fullmatch(pattern, (token or "").strip())) or bool(_num_re.fullmatch(t))
 
-def heuristic_rebuild(raw_line: str, expected_cols: int, numeric_idx: Set[int]) -> Optional[List[str]]:
+def heuristic_rebuild(raw_line: str, expected_cols: int, numeric_idx: Set[int],
+                      text_idx: Set[int]) -> Optional[List[str]]:
     """Greedy attempt to rebuild a mis-parsed CSV row.
 
-    The algorithm splits *raw_line* on commas and joins tokens back together,
-    preferring to merge tokens at numeric column positions (``numeric_idx``).
-    If the final column count matches ``expected_cols`` a list of field strings
-    is returned; otherwise ``None`` is returned to signal failure.
+    Parameters
+    ----------
+    raw_line:
+        Original CSV line without surrounding newline.
+    expected_cols:
+        Desired number of fields once rebuilt.
+    numeric_idx:
+        Column indexes expected to contain numeric values.  Tokens at these
+        positions are merged first using a numeric heuristic.
+    text_idx:
+        Column indexes for non-numeric fields that may legitimately contain
+        commas.  Remaining extra tokens are distributed across these positions
+        from left to right.
+
+    Returns
+    -------
+    list[str] | None
+        A rebuilt list of fields if the final column count matches
+        ``expected_cols``; otherwise ``None`` to signal failure.
     """
     parts = raw_line.split(",")
     fields, idx = [], 0
+    extra_total = max(0, len(parts) - expected_cols)
     while idx < len(parts) and len(fields) < expected_cols:
         pos = len(fields)
         if pos in numeric_idx:
@@ -150,13 +173,22 @@ def heuristic_rebuild(raw_line: str, expected_cols: int, numeric_idx: Set[int]) 
                 if _looks_like_numeric_token(cand):
                     best, best_used = cand, used
             if best is None:
-                # fallback: allocate minimal needed parts so we can finish with correct length
                 remaining_parts = len(parts) - idx
                 remaining_fields = expected_cols - len(fields)
                 used = max(1, remaining_parts - (remaining_fields - 1))
                 best, best_used = ",".join(parts[idx:idx+used]), used
             fields.append(best)
             idx += best_used
+            extra_total = max(0, extra_total - (best_used - 1))
+        elif pos in text_idx:
+            remaining_text = sum(1 for i in text_idx if i >= pos)
+            if extra_total >= remaining_text:
+                used = 1 + (extra_total - (remaining_text - 1))
+            else:
+                used = 1
+            fields.append(",".join(parts[idx:idx+used]))
+            idx += used
+            extra_total = max(0, extra_total - (used - 1))
         else:
             fields.append(parts[idx])
             idx += 1
@@ -215,7 +247,8 @@ def load_rules_json(path: Optional[str]) -> Dict[str, dict]:
 
 def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
                          numeric_cols: Set[str], date_cols: Set[str], log_path: str,
-                         strict: bool, max_errors: int) -> Tuple[int,int,int]:
+                         strict: bool, max_errors: int,
+                         column_count: int = 0) -> Tuple[int,int,int]:
     """Repair *in_path* and write sanitized output to *out_path*.
 
     Numeric columns are normalized with :func:`normalize_numeric_cell` and date
@@ -227,90 +260,165 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
     """
     total = repaired = unrecoverable = 0
     bad_writer = None
+    sidecar_fh = None
+    sidecar_tmp = sidecar_path + ".tmp"
+    _ensure_parent_dir(out_path)
+    out_tmp = out_path + ".tmp"
 
-    with open(in_path, "r", encoding="utf-8-sig", newline="") as fin, \
-         open(out_path, "w", encoding="utf-8", newline="") as fout:
+    try:
+        with open(in_path, "r", encoding="utf-8-sig", newline="") as fin, \
+             open(out_tmp, "w", encoding="utf-8", newline="") as fout:
 
-        # header: read once, write verbatim
-        first_line = fin.readline()
-        if not first_line:
-            log_warn("Empty file; nothing to do", log_path)
-            return (0,0,0)
+            # header: read once, write verbatim
+            first_line = fin.readline()
+            if not first_line:
+                log_warn("Empty file; nothing to do", log_path)
+                return (0,0,0)
 
-        # write the header exactly as read, preserving original newline
-        fout.write(first_line)
-        header = next(csv.reader([first_line]))
-        # writer is only used for subsequent rows
-        writer = csv.writer(fout, quoting=csv.QUOTE_ALL)
+            # handle optional leading comment like "# batch_type=..."
+            if first_line.lstrip().startswith("#"):
+                fout.write(first_line)  # preserve comment line
+                header_line = fin.readline()
+                if not header_line:
+                    log_warn("Missing header after comment line; nothing to do", log_path)
+                    return (0,0,0)
+                fout.write(header_line)
+                header = next(csv.reader([header_line]))
+            else:
+                # write the header exactly as read, preserving original newline
+                fout.write(first_line)
+                header = next(csv.reader([first_line]))
 
-        header_map = {h.strip().lower(): i for i, h in enumerate(header)}
-        if numeric_cols:
-            numeric_idx = {header_map[h] for h in header_map if h in numeric_cols}
-        else:
-            numeric_idx = {header_map[h] for h in header_map if h in FALLBACK_NUMERIC_NAMES}
-        date_idx = {header_map[h] for h in header_map if h in date_cols} if date_cols else set()
+            # writer is only used for subsequent rows
+            writer = csv.writer(fout, quoting=csv.QUOTE_ALL)
 
-        expected = len(header)
-        reader = csv.reader(fin)
-        line_no = 1
+            header_map = {h.strip().lower(): i for i, h in enumerate(header)}
+            header_keys = set(header_map)
 
-        for row in reader:
-            line_no += 1
-            if len(row) != expected:
-                raw_record = reader.dialect.delimiter.join(row)
-                rebuilt = heuristic_rebuild(raw_record, expected, numeric_idx)
-                if rebuilt is None:
+            if column_count and len(header) != column_count:
+                log_warn(
+                    f"Header has {len(header)} column(s) but column_count={column_count}",
+                    log_path,
+                )
+
+            if numeric_cols:
+                missing_numeric = numeric_cols - header_keys
+                if missing_numeric:
+                    log_warn(
+                        "numeric_cols not in header: " + ", ".join(sorted(missing_numeric)),
+                        log_path,
+                    )
+                numeric_idx = {header_map[h] for h in numeric_cols if h in header_map}
+            else:
+                numeric_idx = {header_map[h] for h in header_map if h in FALLBACK_NUMERIC_NAMES}
+
+            if date_cols:
+                missing_dates = date_cols - header_keys
+                if missing_dates:
+                    log_warn(
+                        "date_cols not in header: " + ", ".join(sorted(missing_dates)),
+                        log_path,
+                    )
+                date_idx = {header_map[h] for h in date_cols if h in header_map}
+            else:
+                date_idx = set()
+
+            expected = column_count or len(header)
+            if not column_count:
+                log_warn(
+                    f"column_count not provided; assuming {expected}",
+                    log_path,
+                )
+
+            text_idx = set(range(expected)) - numeric_idx if numeric_idx else set()
+            reader = csv.reader(fin)
+            line_no = 1
+
+            for row in reader:
+                line_no += 1
+                if len(row) < expected:
+                    pad = expected - len(row)
+                    row = row + [""] * pad
+                    log_warn(
+                        f"Row {line_no} missing {pad} column(s); padded", log_path
+                    )
+                elif len(row) > expected:
+                    raw_record = reader.dialect.delimiter.join(row)
+                    extra = len(row) - expected
+                    rebuilt = heuristic_rebuild(raw_record, expected, numeric_idx, text_idx)
+                    if rebuilt is None:
+                        if any(idx >= expected for idx in numeric_idx):
+                            unrecoverable += 1
+                            if bad_writer is None:
+                                _ensure_parent_dir(sidecar_path)
+                                sidecar_fh = open(sidecar_tmp, "w", encoding="utf-8", newline="")
+                                bad_writer = csv.writer(sidecar_fh, quoting=csv.QUOTE_ALL)
+                                bad_writer.writerow(header)
+                            bad_writer.writerow(row)
+                            log_error(
+                                f"Row {line_no} unrecoverable: extra columns; raw saved -> {os.path.basename(sidecar_path)}",
+                                log_path,
+                            )
+                            if strict or (max_errors and unrecoverable >= max_errors):
+                                return (total, repaired, unrecoverable)
+                            continue
+                        else:
+                            row = row[:expected]
+                            log_warn(
+                                f"Row {line_no} had {extra} extra column(s); truncated",
+                                log_path,
+                            )
+                    else:
+                        row = rebuilt
+                        log_warn(
+                            f"Row {line_no} had {extra} extra column(s); rebuilt",
+                            log_path,
+                        )
+
+                total += 1
+                changed_any = False
+                bad_cell = False
+                out_row: List[str] = []
+                for idx, val in enumerate(row):
+                    v = (val or "").strip()
+                    if idx in numeric_idx:
+                        norm, changed, bad = normalize_numeric_cell(v)
+                        if bad: bad_cell = True
+                        if changed: changed_any = True
+                        out_row.append(norm)
+                    elif idx in date_idx:
+                        norm, changed, bad = normalize_date_cell(v)
+                        if bad: bad_cell = True
+                        if changed: changed_any = True
+                        out_row.append(norm)
+                    else:
+                        out_row.append(v)
+                if bad_cell:
                     unrecoverable += 1
                     if bad_writer is None:
-                        fb = open(sidecar_path, "w", encoding="utf-8", newline="")
-                        bad_writer = csv.writer(fb, quoting=csv.QUOTE_ALL)
+                        _ensure_parent_dir(sidecar_path)
+                        sidecar_fh = open(sidecar_tmp, "w", encoding="utf-8", newline="")
+                        bad_writer = csv.writer(sidecar_fh, quoting=csv.QUOTE_ALL)
                         bad_writer.writerow(header)
                     bad_writer.writerow(row)
                     log_error(
-                        f"Row {line_no} unrecoverable: column mismatch; raw saved -> {os.path.basename(sidecar_path)}",
+                        f"Row {line_no} unrecoverable: invalid numeric or date value; raw saved",
                         log_path,
                     )
                     if strict or (max_errors and unrecoverable >= max_errors):
                         return (total, repaired, unrecoverable)
                     continue
-                row = rebuilt
 
-            total += 1
-            changed_any = False
-            bad_cell = False
-            out_row: List[str] = []
-            for idx, val in enumerate(row):
-                v = (val or "").strip()
-                if idx in numeric_idx:
-                    norm, changed, bad = normalize_numeric_cell(v)
-                    if bad: bad_cell = True
-                    if changed: changed_any = True
-                    out_row.append(norm)
-                elif idx in date_idx:
-                    norm, changed, bad = normalize_date_cell(v)
-                    if bad: bad_cell = True
-                    if changed: changed_any = True
-                    out_row.append(norm)
-                else:
-                    out_row.append(v)
-            if bad_cell:
-                unrecoverable += 1
-                if bad_writer is None:
-                    fb = open(sidecar_path, "w", encoding="utf-8", newline="")
-                    bad_writer = csv.writer(fb, quoting=csv.QUOTE_ALL)
-                    bad_writer.writerow(header)
-                bad_writer.writerow(row)
-                log_error(
-                    f"Row {line_no} unrecoverable: invalid numeric or date value; raw saved",
-                    log_path,
-                )
-                if strict or (max_errors and unrecoverable >= max_errors):
-                    return (total, repaired, unrecoverable)
-                continue
+                if changed_any:
+                    repaired += 1
+                writer.writerow(out_row)
 
-            if changed_any:
-                repaired += 1
-            writer.writerow(out_row)
+    finally:
+        if sidecar_fh is not None:
+            sidecar_fh.close()
+            os.replace(sidecar_tmp, sidecar_path)
+        if os.path.exists(out_tmp):
+            os.replace(out_tmp, out_path)
 
     return (total, repaired, unrecoverable)
 
@@ -395,6 +503,7 @@ def main():
     import_table = r.get("import_table", "")
     numeric_cols_from_manifest = {c.strip().lower() for c in r.get("numeric_cols", [])}
     date_cols_from_manifest = {c.strip().lower() for c in r.get("date_cols", [])}
+    column_count = int(r.get("column_count", 0))
 
     numeric_cols: Set[str] = set()
     date_cols: Set[str] = date_cols_from_manifest
@@ -417,7 +526,7 @@ def main():
     try:
         total, repaired, bad = repair_and_write_csv(
             args.in_path, args.out_path, sidecar, numeric_cols, date_cols,
-            args.log_path, args.strict, args.max_errors
+            args.log_path, args.strict, args.max_errors, column_count
         )
     except Exception as e:
         log_error(f"Repair failed: {e}", args.log_path)
