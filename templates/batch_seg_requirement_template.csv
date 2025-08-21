@@ -1,0 +1,21 @@
+account,account_type,cusip,from,to,quantity,description
+1DW00200,1,00432T104,S,C,10,template
+,,,,,,
+,,,,,,
+,,,,,,
+layout:,,,,,,
+field,required,type,description,,,
+account,Y,string(16),,,,
+account_type,Y,int(11),"0-dvp
+1-cash
+2-margin
+3-shortsale",,,
+cusip,Y,string(32),,,,
+from,Y,string(1),"S - Seg
+O - Open
+C - Collateral",,,
+to,Y,string(1),"S - Seg
+O - Open
+C - Collateral",,,
+quantity,Y,"decimal(30,10)",,,,
+description,Y,varchar(128),user define ,,,

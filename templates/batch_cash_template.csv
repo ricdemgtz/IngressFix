@@ -1,0 +1,31 @@
+trade_date,settle_date,account,account_type,currency,amount,type,remark,pay_bank_account,middle_bank_account,receive_bank_account,reference,dividend_product_id,dividend_custodian_code,dividend_custodian_account
+20210305,20210305,89990022,1,USD,-8255.52,1,VS G2161P116 - CHINA SXT PHARM,,,,,,,
+20210305,20210305,89990022,1,USD,8255.52,1,"P/O 4602 VS. 9,572.16",,,,,,,
+20210305,20210305,89990022,1,USD,1482,1,VS 76665T102 - RILEY EXP PERMI,,,,,,,
+20210305,20210305,89990022,1,USD,386.92,1,VS M78673114 - PERION NETWORK,,,,,,,
+20210305,20210305,89990022,1,USD,4552,1,VS M78673114 - PERION NETWORK,,,,,,,
+,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,
+layout:,,,,,,,,,,,,,,
+field,required,type,description,,,,,,,,,,,
+trade_date,N,string:YYYYMMDD,"If not, it will be automatically set to system business day",,,,,,,,,,,
+settle_date,N,string:YYYYMMDD,"If not, it will be automatically set to system business day",,,,,,,,,,,
+account,Y,string(16),,,,,,,,,,,,
+account_type,Y,int(11),"0-dvp
+1-cash
+2-margin
+3-shortsale",,,,,,,,,,,
+currency,Y,string(3),USD,,,,,,,,,,,
+amount,Y,"decimal(30,10)",The cash input is positive and the cash output is negative,,,,,,,,,,,
+type,Y,int(11),"1-CASH IN/OUT
+2-SHORT MARK TO MARKET
+3-CORPACTION",,,,,,,,,,,
+remark,N,varchar(128),user define,,,,,,,,,,,
+pay_bank_account,N,varchar(64),"user define, like 'BMO:ACCOUNT1:Number1'",,,,,,,,,,,
+receive_bank_account,N,varchar(64),"user define, like 'BMO:ACCOUNT1:Number1'",,,,,,,,,,,
+intermediary_bank_account,N,varchar(64),"user define, like 'BMO:ACCOUNT1:Number1'",,,,,,,,,,,
+reference,N,varchar(64),related reference number ,,,,,,,,,,,
+dividend_product_id,N,varchar(32),corpaction related position product_id,,,,,,,,,,,
+dividend_custodian_code,N,varchar(32),corpaction related position custodian code,,,,,,,,,,,
+dividend_custodian_account,N,varchar(32),corpaction related position custodian account,,,,,,,,,,,

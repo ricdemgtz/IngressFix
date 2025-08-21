@@ -1,0 +1,54 @@
+trade_date,settle_date,market,product_id,account,account_type,side,open_close,spc_code,external_id,clearing_account,destination_code,capacity,legend,trailer,quantity,currency,price,execution_time,execution_id,mpid,contra_mpid,fee1,fee2,fee3,fee4,fee5,sec_fee,commission
+20210303,20210305,N,CHWY,6ZF03718,2,B,O,,2119047,,,1,3,,10,USD,93,12:02:42,1,VLOX,SPDR,0.01,0,0,0
+20210303,20210305,N,CHWY,6ZF03718,2,B,O,,2120807,,,1,3,,10,USD,90,14:45:07,2,VLOX,SPDR,0.01,0,0,0
+20210303,20210305,N,CHWY,6ZF03718,2,S,C,,2120831,,,1,3,,10,USD,89.5,14:47:33,3,VLOX,SPDR,0.01,0,0,0
+,,,,,,,,,,,,,,,,,,,,,,,,,
+layout:,,,,,,,,,,,,,,,,,,,,,,,,,
+field,required,type,description,,,,,,,,,,,,,,,,,,,,,,
+trade_date,N,string:YYYYMMDD,"If not pass, it will be automatically updated to t0 according to the market table",,,,,,,,,,,,,,,,,,,,,,
+settle_date,N,string:YYYYMMDD,"If not pass, the settle date will be updated according to tradedate",,,,,,,,,,,,,,,,,,,,,,
+market,Y,char(1),,,,,,,,,,,,,,,,,,,,,,,
+product_id,Y,string(32),symbol,,,,,,,,,,,,,,,,,,,,,,
+account,Y,string(16),,,,,,,,,,,,,,,,,,,,,,,
+account_type,Y,char,"0-dvp
+1-cash
+2-margin
+3-shortsale",,,,,,,,,,,,,,,,,,,,,,
+side,Y,int,"1 :buy
+2 : sell
+3 : cancel buy
+4 : cancel sell",,,,,,,,,,,,,,,,,,,,,,
+open_close,N,char(1),"O-Open position
+C-Close position",,,,,,,,,,,,,,,,,,,,,,
+spc_code,N,char(1),"If close option position, please input 'F'.",,,,,,,,,,,,,,,,,,,,,,
+external_id,Y,varchar(32),unique external id .,,,,,,,,,,,,,,,,,,,,,,
+clearing_account,N,string(32),If ex-clearing please input the clearing account .,,,,,,,,,,,,,,,,,,,,,,
+destination_code,N,varchar(1),User defined,,,,,,,,,,,,,,,,,,,,,,
+capacity,Y,varchar(1),1 £ºas AGENT for you we bought/sold this security,,,,,,,,,,,,,,,,,,,,,,
+,,,"2 : as PRINCIPAL we have bought from, or sold to you this security",,,,,,,,,,,,,,,,,,,,,,
+,,,"4 : as AGENT for both buyger and seller we are charging a commission, the amount of which will be furnished upon written request",,,,,,,,,,,,,,,,,,,,,,
+,,,6 : our firm maintains a primary market in this security and from time to time the firm or its officers or employees may have a long or short position and buy or sell the security of this company,,,,,,,,,,,,,,,,,,,,,,
+,,,7 : as prime broker,,,,,,,,,,,,,,,,,,,,,,
+,,,8 : as custodian,,,,,,,,,,,,,,,,,,,,,,
+,,,9 : as principal on the exchange floor,,,,,,,,,,,,,,,,,,,,,,
+,,,A : third market execution,,,,,,,,,,,,,,,,,,,,,,
+,,,C : used in as agent trading in money market securities; reflects trades run as agent for the issuer,,,,,,,,,,,,,,,,,,,,,,
+,,,D : used in as agent trading in money market securities; reflects dealer placement trades run as agent. Used when a customer buys from inventory,,,,,,,,,,,,,,,,,,,,,,
+,,,I : used in as agent trading in money market securities; reflects dealer placement trades run as agent. Used when an inventory account buys from the issuer,,,,,,,,,,,,,,,,,,,,,,
+,,,P : for primary BA trading; reflects principal trades involving customer participation in the specific acceptances. The system automatically allocates loan number(s) from an inventory on a FIFO basis,,,,,,,,,,,,,,,,,,,,,,
+legend,N,varchar(1),User defined,,,,,,,,,,,,,,,,,,,,,,
+trailer,N,varchar(255),user defined,,,,,,,,,,,,,,,,,,,,,,
+quantity,Y,"decimal(30,10)",trade quantity,,,,,,,,,,,,,,,,,,,,,,
+currency,Y,string(3),USD,,,,,,,,,,,,,,,,,,,,,,
+priceprice,Y,"decimal(30,10)",trade price,,,,,,,,,,,,,,,,,,,,,,
+exec_time,Y,HH:MM:SS.sss,match time,,,,,,,,,,,,,,,,,,,,,,
+execution_id,Y,unique order id in same external id.,,,,,,,,,,,,,,,,,,,,,,,
+mpid,Y,string(16),front exec broker mpid,,,,,,,,,,,,,,,,,,,,,,
+contra_mpid,Y,string(16),back exec broker mpid,,,,,,,,,,,,,,,,,,,,,,
+fee1,N,"decimal(30,10)","user define , pass through.",,,,,,,,,,,,,,,,,,,,,,
+fee2,N,"decimal(30,10)","user define , pass through.",,,,,,,,,,,,,,,,,,,,,,
+fee3,N,"decimal(30,10)","user define , pass through.",,,,,,,,,,,,,,,,,,,,,,
+fee4,N,"decimal(30,10)","If these columns are empty, the system calculates them automatically, otherwise the input value is taken",,,,,,,,,,,,,,,,,,,,,,
+fee5,N,"decimal(30,10)","If these columns are empty, the system calculates them automatically, otherwise the input value is taken",,,,,,,,,,,,,,,,,,,,,,
+sec_fee,N,"decimal(30,10)","If these columns are empty, the system calculates them automatically, otherwise the input value is taken",,,,,,,,,,,,,,,,,,,,,,
+commission,N,"decimal(30,10)","user define , pass through.",,,,,,,,,,,,,,,,,,,,,,

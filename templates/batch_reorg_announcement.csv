@@ -1,0 +1,14 @@
+event_id,event_type,description,record_date,pay_date,cusip,to_cusip,rate_from,rate_to,m_v
+123,STOCK SPLIT,AAPL 1 share split into 2 shares,20211205,20211216,AAPL,AAPL,1,2
+"					",,,,,,,
+"Description					",,,,,,,
+event_id,dtcc event id,,,,,,
+event_type,dtcc event type,,,,,,
+"Description					",dtcc description,,,,,,
+record_date,dtcc position record date,,,,,,
+pay_date,dtcc pay date,,,,,,
+cusip,record cusip,,,,,,
+to_cusip,converted cusip ,,,,,,
+rate_from,"product_id:to_cusip = rate_from:rate_to,1:2 means 1 product_id change to 2 to_cusip",,,,,,
+rate_to,,,,,,,
+m_v,mandatory or voluntory,,,,,,

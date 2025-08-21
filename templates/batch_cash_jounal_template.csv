@@ -1,0 +1,13 @@
+account,amount,description,cusip,user
+,,,,
+,,,,
+,,,,
+,,,,
+,,,,
+layout:,,,,
+field,required,type,description,
+account,Y,string(16),account + account_type,
+amount,Y,"decimal(30,10)",The cash input is positive and the cash output is negative,
+description,Y,,,
+cusip,O,string(32),cusip,
+user code

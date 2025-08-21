@@ -1,0 +1,10 @@
+account_from,account_to
+,
+,
+,
+,
+,
+layout:,
+field,required,type,description
+account_from,Y,string(16),account 8 characters
+account_to,Y,string(16),account 8 characters

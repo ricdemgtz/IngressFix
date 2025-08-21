@@ -1,0 +1,28 @@
+account,account_type,product_id,order_type,amount,price,redeem_fee
+88VS5017,1,DDM999999,2,22259.94,1,0
+88VS7118,1,DDM999999,2,3317.09,1,0
+88VS7138,1,DDM999999,2,2051,1,0
+88VS8086,1,DDM999999,2,31772.92,1,0
+88VS8528,1,DDM999999,2,9248.78,1,0
+88VS9988,1,DDM999999,2,3545,1,0
+88VS9998,1,DDM999999,2,1201,1,0
+88VS8305,1,DDM999999,1,500000,1,0
+88VS8667,1,DDM999999,1,81760.5,1,0
+88VS1671,1,DDM999999,1,34135,1,0
+88VS8619,1,DDM999999,1,22510.08,1,0
+,,,,,,
+,,,,,,
+,,,,,,
+layout:,,,,,,
+field,required,type,description,,,
+account,Y,string(16),,,,
+account_type,Y,int(11),"0-dvp
+1-cash
+2-margin
+3-shortsale",,,
+product_id,Y,string(32),symbol,,,
+order_type,Y,int(11),"1-PURCHASE
+2-REDEMPTION",,,
+amount,Y,"decimal(30,10)",Amount returned from manual trade request,,,
+price,N,"decimal(30,10)",default 1,,,
+redeem_fee,N,"decimal(30,10)",default 0,,,

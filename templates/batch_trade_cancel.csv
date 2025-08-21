@@ -1,0 +1,5 @@
+orig_trade_id
+1324305
+layout:
+field,required,type,description
+orig_trade_id,Y,string(32),trade id to be cancelled

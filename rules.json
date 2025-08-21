@@ -1,0 +1,18 @@
+{
+  "cash_journal":         { "import_table": "import_cash_journal",         "numeric_cols": ["amount","fee","tax"] },
+  "cash_movement":        { "import_table": "import_cash_movement",        "numeric_cols": ["amount"] },
+  "cash_receipt":         { "import_table": "import_cash_receipt",         "numeric_cols": ["amount"] },
+  "cash":                 { "import_table": "import_cash",                 "numeric_cols": ["amount"] },
+  "acats_cash":           { "import_table": "import_acats_cash_movement",  "numeric_cols": ["amount"] },
+  "acats_stock":          { "import_table": "import_acats_stock_movement", "numeric_cols": ["qty","price","amount"] },
+  "stock_movement":       { "import_table": "import_stock_movement",       "numeric_cols": ["qty","price","amount"] },
+  "product":              { "import_table": "import_product",              "numeric_cols": ["price","fee"] },
+  "seg_req":              { "import_table": "import_seg_requirement",      "numeric_cols": ["requirement","balance","market_value"] },
+  "gl_movement":          { "import_table": "import_gl_movement",          "numeric_cols": ["debit","credit","amount","balance"] },
+  "trade_cancel":         { "import_table": "import_trade_cancel",         "numeric_cols": ["qty","price","net_amount"] },
+  "trade":                { "import_table": "import_trade",                "numeric_cols": ["qty","price","net_amount"] },
+  "dividend_announce":    { "import_table": "import_dividend_announcement","numeric_cols": ["amount","gross","net","rate"] },
+  "fund_txn":             { "import_table": "import_fund_purchase_redemption","numeric_cols": ["shares","nav","amount"] },
+  "reorg_announce":       { "import_table": "import_reorg_announcement",   "numeric_cols": ["ratio","cash_in_lieu"] },
+  "account_migration":    { "import_table": "import_account_migration",    "numeric_cols": ["opening_balance","credit_limit"] }
+}

@@ -1,0 +1,29 @@
+trade_date,settle_date,product_id,account,account_type,custodian_code,custodian_account,quantity,avg_price,type,remark,reference,,
+20210305,20210305,ASXC,6ZF03718,2,,,1001,0,0,NAME CHANGE,,,
+20210305,20210308,TRXC,6ZF03718,2,,,-1000,0,0,CorpAction-89366M300_to_04367G103@1:1,20210305_89366M300_to_04367G103@1:1,,
+20210305,20210305,TRXC,6ZF03718,2,,,999,0,0,CorpAction-89366M300_to_04367G103@1:1,20210305_89366M300_to_04367G103@1:1,,
+20210305,20210305,TRXC,6ZF03718,2,,,-1000,4.184266,0,CorpAction-89366M300_to_04367G103@1:1,20210305_89366M300_to_04367G103@1:1,,
+,,,,,,,,,,,,,
+,,,,,,,,,,,,,
+,,,,,,,,,,,,,
+,,,,,,,,,,,,,
+,,,,,,,,,,,,,
+layout:,,,,,,,,,,,,,
+field,required,type,description,,,,,,,,,,
+trade_date,N,string:YYYYMMDD,"If notp pass, it will be automatically set to system business day",,,,,,,,,,
+settle_date,N,string:YYYYMMDD,"If not pass, it will be automatically set to system business day",,,,,,,,,,
+product_id,Y,string(32),symbol,,,,,,,,,,
+account,Y,string(16),,,,,,,,,,,
+account_type,Y,int(11),"0-dvp
+1-cash
+2-margin
+3-shortsale",,,,,,,,,,
+custodian_code,N,varchar(32),position custodian code,,,,,,,,,,
+custodian_account,N,varchar(32),position custodian account,,,,,,,,,,
+quantity,Y,"decimal(30,10)","quantity, positive for product in , nagetive for product out",,,,,,,,,,
+avg_price,N,"decimal(30,10)",average price for this position. Only used for product in .,,,,,,,,,,
+type,Y,int(11),"1-product in/out 
+2-SHORT MARK TO MARKET
+3-CORPACTION",,,,,,,,,,
+remark,Y,varchar(32),user define ,,,,,,,,,,
+reference,N,varchar(32),related reference number.,,,,,,,,,,

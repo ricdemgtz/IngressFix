@@ -1,0 +1,11 @@
+type,account,amount,description,bank_account,ordering_customer_name,remittance_detail,senders_reference,sender_to_receiver_information,ordering_customer_address,ordering_bank_name,ordering_bank_address,ordering_bank_name2,ordering_bank_address2
+,,,,,,,,,,,,,
+,,,,,,,,,,,,,
+
+
+layout:,,,,
+field,required,type,description,
+account,Y,string(16),account + account_type,
+bank_account,Y,string(16),bank_account + account_type,
+amount,Y,"decimal(30,10)",,
+description,Y,,,
