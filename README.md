@@ -13,10 +13,14 @@ values are database friendly.  All timestamps in logs are in the
 ```bash
 export UBMS_LOG_PATH="$PWD/ubms_batch.log"   # optional override
 python3 ingressfix.py \
-  --in sample.csv --out sample_fixed.csv \
+  --in tests/tests_csvs/sample_cash_journal.csv \
+  --out sample_cash_journal_fixed.csv \
   --batch-type cash_journal --rules rules.json \
   --strict --max-errors 0
 ```
+
+This command processes the included `sample_cash_journal.csv` and writes
+`sample_cash_journal_fixed.csv` in the current directory.
 
 The original header row is written verbatim.  All fields are quoted on output
 and inner quotes are doubled.  Numeric columns are stripped of currency symbols,
