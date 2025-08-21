@@ -141,3 +141,25 @@ def test_preserve_newline_in_field(tmp_path: Path):
         rows = list(csv.reader(f))
     assert len(rows) == 3
     assert rows[1] == ["A1", "line1\nline2"]
+
+
+def test_multiline_field_count(tmp_path: Path):
+    inp = tmp_path / "multiline_count.csv"
+    inp.write_text(
+        "account,description\n"
+        "A1,\"line1\nline2\"\n"
+        "A2,\"second\"\n"
+    )
+    out = tmp_path / "multiline_count_fixed.csv"
+    side = tmp_path / "multiline_count_fixed.unrecoverable.csv"
+    log = tmp_path / "test.log"
+
+    total, repaired, bad = repair_and_write_csv(
+        str(inp), str(out), str(side), set(), set(), str(log), False, 0
+    )
+    assert total == 2 and repaired == 0 and bad == 0
+
+    with out.open() as f:
+        rows = list(csv.reader(f))
+    assert rows[1] == ["A1", "line1\nline2"]
+    assert rows[2] == ["A2", "second"]
