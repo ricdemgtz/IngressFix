@@ -56,6 +56,10 @@ def test_repair_and_sidecar(tmp_path: Path):
     assert total == 3
     assert bad == 2
 
+    # header line should be preserved byte-for-byte
+    with inp.open("rb") as fin, out.open("rb") as fout:
+        assert fin.readline() == fout.readline()
+
     with out.open() as f:
         rows = list(csv.reader(f))
     assert rows[0] == ["account", "amount", "description"]
@@ -126,7 +130,7 @@ def test_preserve_newline_in_field(tmp_path: Path):
     log = tmp_path / "test.log"
 
     total, repaired, bad = repair_and_write_csv(
-        str(inp), str(out), str(side), set(), str(log), False, 0
+        str(inp), str(out), str(side), set(), set(), str(log), False, 0
     )
     assert total == 2 and bad == 0
 
