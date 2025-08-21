@@ -43,17 +43,7 @@ def now_et_str() -> str:
     dt = datetime.now(ET_TZ) if ET_TZ else datetime.now()
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
-def _ensure_dir(p: str) -> None:
-    """Ensure the directory for *p* exists.
-
-    The helper mirrors `mkdir -p` semantics and is intentionally silent on
-    failure; any subsequent file operations will surface meaningful errors.
-    """
-    d = os.path.dirname(p)
-    if d and not os.path.exists(d):
-        os.makedirs(d, exist_ok=True)
-
-def _ensure_parent_dir(path: str) -> None:
+def _ensure_dir(path: str) -> None:
     """Ensure the parent directory for *path* exists."""
     parent = os.path.dirname(path)
     if parent and not os.path.exists(parent):
@@ -262,7 +252,7 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
     bad_writer = None
     sidecar_fh = None
     sidecar_tmp = sidecar_path + ".tmp"
-    _ensure_parent_dir(out_path)
+    _ensure_dir(out_path)
     out_tmp = out_path + ".tmp"
 
     try:
@@ -350,7 +340,7 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
                         if any(idx >= expected for idx in numeric_idx):
                             unrecoverable += 1
                             if bad_writer is None:
-                                _ensure_parent_dir(sidecar_path)
+                                _ensure_dir(sidecar_path)
                                 sidecar_fh = open(sidecar_tmp, "w", encoding="utf-8", newline="")
                                 bad_writer = csv.writer(sidecar_fh, quoting=csv.QUOTE_ALL)
                                 bad_writer.writerow(header)
@@ -396,7 +386,7 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
                 if bad_cell:
                     unrecoverable += 1
                     if bad_writer is None:
-                        _ensure_parent_dir(sidecar_path)
+                        _ensure_dir(sidecar_path)
                         sidecar_fh = open(sidecar_tmp, "w", encoding="utf-8", newline="")
                         bad_writer = csv.writer(sidecar_fh, quoting=csv.QUOTE_ALL)
                         bad_writer.writerow(header)
