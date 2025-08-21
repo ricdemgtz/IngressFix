@@ -236,8 +236,10 @@ def repair_and_write_csv(in_path: str, out_path: str, sidecar_path: str,
             return (0,0,0)
 
         header = next(csv.reader([first_line]))
+        # write the header exactly as read, preserving original newline
+        fout.write(first_line)
+        # writer is only used for subsequent rows
         writer = csv.writer(fout, quoting=csv.QUOTE_ALL)
-        writer.writerow(header)
 
         header_map = {h.strip().lower(): i for i, h in enumerate(header)}
         if numeric_cols:
