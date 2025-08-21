@@ -348,3 +348,64 @@ def test_sample_csvs(tmp_path: Path):
 
         # header should always be preserved byte-for-byte
         assert out_rows[0] == expected_rows[0]
+
+def test_mismatched_numeric_date_cols_warn(tmp_path: Path):
+    inp = tmp_path / "mismatch_cols.csv"
+    inp.write_text("a,b,c\n1,2,3\n")
+    out = tmp_path / "mismatch_cols_fixed.csv"
+    side = tmp_path / "mismatch_cols_fixed.unrecoverable.csv"
+    log = tmp_path / "test.log"
+
+    repair_and_write_csv(
+        str(inp), str(out), str(side), {"amount"}, {"date"}, str(log), False, 0, 3
+    )
+    content = log.read_text()
+    assert "numeric_cols not in header: amount" in content
+    assert "date_cols not in header: date" in content
+    assert not side.exists()
+
+
+def test_rebuild_numeric_and_text_commas(tmp_path: Path):
+    samples_dir = Path(__file__).resolve().parent / "tests_csvs"
+    inp = samples_dir / "mixed_commas.csv"
+    out = tmp_path / "mixed_commas_fixed.csv"
+    side = tmp_path / "mixed_commas_fixed.unrecoverable.csv"
+    log = tmp_path / "test.log"
+
+    total, repaired, bad = repair_and_write_csv(
+        str(inp), str(out), str(side), {"amount"}, set(), str(log), False, 0, 2
+    )
+    assert total == 1 and repaired == 1 and bad == 0
+
+    with out.open() as f:
+        rows = list(csv.reader(f))
+    assert rows[0] == ["amount", "description"]
+    assert rows[1] == ["1234", "desc,with comma"]
+    assert not side.exists()
+
+
+def test_sidecar_created_only_when_unrecoverable(tmp_path: Path):
+    inp_bad = tmp_path / "bad.csv"
+    inp_bad.write_text("account,amount\nA1,bad\n")
+    out_bad = tmp_path / "bad_fixed.csv"
+    side_bad = tmp_path / "bad_fixed.unrecoverable.csv"
+    log_bad = tmp_path / "bad.log"
+
+    total, repaired, bad = repair_and_write_csv(
+        str(inp_bad), str(out_bad), str(side_bad), {"amount"}, set(), str(log_bad), False, 0
+    )
+    assert bad == 1
+    assert side_bad.exists()
+
+    inp_good = tmp_path / "good.csv"
+    inp_good.write_text("account,amount\nA1,100\n")
+    out_good = tmp_path / "good_fixed.csv"
+    side_good = tmp_path / "good_fixed.unrecoverable.csv"
+    log_good = tmp_path / "good.log"
+
+    total, repaired, bad = repair_and_write_csv(
+        str(inp_good), str(out_good), str(side_good), {"amount"}, set(), str(log_good), False, 0
+    )
+    assert bad == 0
+    assert not side_good.exists()
+
